@@ -13,6 +13,7 @@
                         <option value="CC">CC</option>
                         <option value="CE">CE</option>
                         <option value="TI">TI</option>
+                        <option value="PA">PA</option>
                     </select>
                 </div>
                 <div>
@@ -74,7 +75,7 @@
                 </select>
 
                 <div class="md:col-span-2 mt-4">
-                    <h3 class="text-lg font-bold mb-2">Ítems de cotización</h3>
+                    <h3 class="text-lg font-bold mb-2">Procedimientos</h3>
                     <div v-for="(item, index) in cotizacion.items" :key="index"
                         class="grid grid-cols-12 gap-2 mb-2 items-center">
 
@@ -83,7 +84,8 @@
 
 
                         <input v-model="item.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4" />
-                        <select v-model="item.lateralidad" class="p-2 border rounded col-span-2">
+                        <select v-model="item.lateralidad" @change="aplicarFormulaLateralidad"
+                            class="p-2 border rounded col-span-2">
                             <option v-for="lateral in lateralidad" :key="lateral" :value="lateral">{{ lateral }}
                             </option>
                         </select>
@@ -102,8 +104,38 @@
 
 
                     <button type="button" @click="agregarItem" class="mt-2 text-sm text-blue-600 hover:underline">+
-                        Agregar ítem</button>
+                        Agregar procedimiento</button>
                 </div>
+
+                <!-- insumos -->
+
+                <div class="md:col-span-2 mt-6">
+                    <h3 class="text-lg font-bold mb-2">Insumos</h3>
+
+                    <div v-for="(insumo, index) in cotizacion.insumos" :key="index"
+                        class="grid grid-cols-12 gap-2 mb-2 items-center">
+
+                        <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded col-span-2"
+                            disabled />
+
+                        <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-6"
+                            disabled />
+
+                        <input v-model.number="insumo.cantidad" placeholder="Cantidad" type="number" min="1"
+                            class="p-2 border rounded col-span-2" />
+
+                        <button @click="eliminarInsumo(index)"
+                            class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
+                    </div>
+
+                    <button type="button" @click="abrirModalInsumos" class="mt-2 text-sm text-blue-600 hover:underline">
+                        + Agregar insumo
+                    </button>
+                </div>
+
+                <QuoterInsumosModal :show="showInsumosModal" @close="showInsumosModal = false"
+                    @select="agregarInsumo" />
+
                 <div class="mt-4 text-right text-lg font-bold">
                     Total: ${{ total }}
                 </div>
@@ -124,25 +156,64 @@
         <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
             <h3 class="text-lg font-bold mb-4">Selecciona un código</h3>
 
-            <div v-for="(r, idx) in resultadosCodigo" :key="idx" class="flex items-center mb-2">
-                <input type="radio" :id="'codigo-' + idx" name="codigoSeleccionado" :value="r"
-                    v-model="codigoSeleccionado" class="mr-2" />
-                <label :for="'codigo-' + idx" class="cursor-pointer">
-                    {{ r.protarpro }} - [{{ r.protartar }}] - {{ r.actnom }} <br /> ( ${{ r.protarval }} )
-                </label>
+            <!-- 🔹 Acordeón por grupo -->
+            <div v-for="(grupo, gIdx) in resultadosPaginados" :key="gIdx" class="mb-4 border rounded-lg shadow-sm">
+                <!-- Encabezado -->
+                <div class="flex justify-between items-center bg-blue-100 px-4 py-2 cursor-pointer hover:bg-blue-200"
+                    @click="toggleGrupo(grupo.protartar)">
+                    <h4 class="font-semibold text-blue-700">
+                        {{ grupo.protartar }} ({{ grupo.tarnom }})
+                    </h4>
+                    <span>
+                        <svg v-if="gruposAbiertos.has(grupo.protartar)" xmlns="http://www.w3.org/2000/svg"
+                            class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                        <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </span>
+                </div>
+
+                <!-- Contenido -->
+                <transition name="fade">
+                    <div v-if="gruposAbiertos.has(grupo.protartar)" class="p-4">
+                        <!-- Seleccionar todo el paquete -->
+                        <div class="flex items-center mb-2">
+                            <input type="checkbox" :id="'paquete-' + gIdx" v-model="seleccionarTodo[gIdx]"
+                                @change="toggleSeleccionarTodo(grupo.items, gIdx)" class="mr-2" />
+                            <label :for="'paquete-' + gIdx" class="cursor-pointer font-semibold">
+                                Seleccionar todo el paquete
+                            </label>
+                        </div>
+
+                        <!-- ✅ Checkboxes individuales -->
+                        <div v-for="(r, idx) in grupo.items" :key="idx" class="flex items-center mb-2">
+                            <input type="checkbox" :id="'codigo-' + gIdx + '-' + idx" :value="r"
+                                v-model="codigoSeleccionado" class="mr-2" />
+                            <label :for="'codigo-' + gIdx + '-' + idx" class="cursor-pointer">
+                                {{ r.protarpro }} - {{ r.actnom }} <br />
+                                (${{ r.protarval }}) <strong>{{ r.connom }}</strong>
+                            </label>
+                        </div>
+                    </div>
+                </transition>
             </div>
 
+            <!-- Botones confirmar/cancelar -->
             <div class="mt-4 flex justify-end gap-2">
                 <button @click="showModal = false" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
                     Cancelar
                 </button>
                 <button @click="confirmarCodigo" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    :disabled="!codigoSeleccionado">
+                    :disabled="codigoSeleccionado.length === 0">
                     Confirmar
                 </button>
             </div>
         </div>
     </div>
+
 
 </template>
 <script setup>
@@ -166,6 +237,7 @@ const cotizacion = ref({
     consultorio_id: '',
     observaciones: '',
     items: [],
+    insumos: [],
     total: 0
 })
 
@@ -178,7 +250,43 @@ const lateralidad = ['izquierda', 'derecha', 'ambos']
 const showModal = ref(false)
 const resultadosCodigo = ref([])
 const itemSeleccionadoIndex = ref(null)
-const codigoSeleccionado = ref(null)
+// const codigoSeleccionado = ref(null)
+const gruposAbiertos = ref(new Set());
+const codigoSeleccionado = ref([]);
+const seleccionarTodo = ref({});
+
+const toggleGrupo = (protartar) => {
+    if (gruposAbiertos.value.has(protartar)) {
+        gruposAbiertos.value.delete(protartar);
+    } else {
+        gruposAbiertos.value.add(protartar);
+    }
+};
+
+const toggleSeleccionarTodo = (items, gIdx) => {
+    if (seleccionarTodo.value[gIdx]) {
+        // Marcar todo
+        codigoSeleccionado.value = [
+            ...codigoSeleccionado.value,
+            ...items.filter(i => !codigoSeleccionado.value.includes(i))
+        ];
+    } else {
+        // Desmarcar todo
+        codigoSeleccionado.value = codigoSeleccionado.value.filter(
+            i => !items.includes(i)
+        );
+    }
+};
+
+// modal insumos
+const showInsumosModal = ref(false)
+const abrirModalInsumos = () => {
+    showInsumosModal.value = true
+}
+
+const resultadosPaginados = computed(() => {
+    return resultadosCodigo.value
+})
 
 onMounted(async () => {
 
@@ -259,13 +367,13 @@ const eliminarItem = (index) => {
 }
 
 const total = computed(() =>
-  cotizacion.value.items.reduce((sum, item) => {
-    const valor = item.valor_con_descuento
-      ? Number(item.valor_con_descuento)
-      : Number(item.valor || 0);
+    cotizacion.value.items.reduce((sum, item) => {
+        const valor = item.valor_con_descuento
+            ? Number(item.valor_con_descuento)
+            : Number(item.valor || 0);
 
-    return sum + valor;
-  }, 0)
+        return sum + valor;
+    }, 0)
 );
 
 const pushNotification = (type, message, title) => {
@@ -277,31 +385,42 @@ const pushNotification = (type, message, title) => {
 }
 
 const buscarCodigo = async (codigo, index) => {
-
     if (!codigo) return;
 
     try {
         const { data, error } = await useSanctumFetch(`/api/codigos/buscar/${codigo}`);
 
-        if (data.value === null) {
+        if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
             return;
+        }
+
+        if (data.value.length === 1) {
+            // ✅ Solo un resultado, lo asignamos directo
+            const unico = data.value[0];
+            Object.assign(cotizacion.value.items[index], {
+                codigo: unico.protarpro,
+                nombre: unico.actnom,
+                valor: unico.protarval,
+                descuento: null
+            });
         } else {
-            if (data.value.length === 1) {
-                console.log("vamos por aca");
-                
-                const unico = data.value
-                Object.assign(cotizacion.value.items[index], {
-                    codigo: unico.protarpro,
-                    nombre: unico.actnom,
-                    valor: unico.protarval,
-                    descuento: null
-                })
-            } else {
-                resultadosCodigo.value = data.value
-                itemSeleccionadoIndex.value = index
-                showModal.value = true
-            }
+            // ✅ Agrupar por protartar
+            const agrupado = data.value.reduce((acc, item) => {
+                if (!acc[item.protartar]) {
+                    acc[item.protartar] = {
+                        protartar: item.protartar,
+                        tarnom: item.tarnom,
+                        items: []
+                    };
+                }
+                acc[item.protartar].items.push(item);
+                return acc;
+            }, {});
+
+            resultadosCodigo.value = Object.values(agrupado);
+            itemSeleccionadoIndex.value = index;
+            showModal.value = true;
         }
     } catch (err) {
         pushNotification('error', 'Código no encontrado', 'Error');
@@ -310,34 +429,71 @@ const buscarCodigo = async (codigo, index) => {
 };
 
 const confirmarCodigo = () => {
-    console.log(itemSeleccionadoIndex.value, cotizacion.value);
+    console.log("👉 Selección:", codigoSeleccionado.value);
 
-    if (codigoSeleccionado.value) {
-        const nuevoItem = {
-            codigo: codigoSeleccionado.value.protarpro,
-            nombre: codigoSeleccionado.value.actnom,
-            valor: codigoSeleccionado.value.protarval,
-            descuento: 0
-        };
+    if (codigoSeleccionado.value.length > 0) {
+        let tieneHMDQ = false;
 
-        if (
-            itemSeleccionadoIndex.value !== null &&
-            cotizacion.value.items[itemSeleccionadoIndex.value]
-        ) {
-            // Si existe, asigno sobre el existente
-            Object.assign(cotizacion.value.items[itemSeleccionadoIndex.value], nuevoItem);
-        } else {
-            // Si NO existe, lo agrego como nuevo
+        codigoSeleccionado.value.forEach(codigo => {
+            if (codigo.protarcon === "HMDQ") {
+                tieneHMDQ = true;
+            }
+
+            const nuevoItem = {
+                codigo: codigo.protarpro,
+                nombre: codigo.actnom,
+                valor: codigo.protarcon === "HMDQ" && tieneHMDQ === false ? 0 : codigo.protarval,
+                descuento: 0
+            };
+
             cotizacion.value.items.push(nuevoItem);
+        });
+
+        // 🚨 Si ninguno era HMDQ => agregamos HONORARIOS CIRUJANO
+        if (tieneHMDQ === false) {
+            // tomo el mismo protarpro de los seleccionados
+            const codigoBase = codigoSeleccionado.value[0]?.protarpro || "SIN-CODIGO";
+
+            cotizacion.value.items.push({
+                codigo: codigoBase,
+                nombre: "HONORARIOS CIRUJANO",
+                valor: 0,
+                descuento: 0
+            });
         }
 
-        pushNotification('success', 'Código seleccionado correctamente', 'Éxito');
+
+        pushNotification("success", "Códigos agregados correctamente", "Éxito");
     }
 
     // Resetear modal
     showModal.value = false;
-    codigoSeleccionado.value = null;
+    codigoSeleccionado.value = [];
     itemSeleccionadoIndex.value = null;
+};
+
+// Marcar/desmarcar paquete completo
+const seleccionarPaquete = (event, grupo) => {
+    if (event.target.checked) {
+        // agregar todos los del grupo
+        grupo.forEach((item) => {
+            if (!codigoSeleccionado.value.some((c) => c.protarpro === item.protarpro)) {
+                codigoSeleccionado.value.push(item);
+            }
+        });
+    } else {
+        // eliminar todos los del grupo
+        codigoSeleccionado.value = codigoSeleccionado.value.filter(
+            (c) => !grupo.some((g) => g.protarpro === c.protarpro)
+        );
+    }
+};
+
+// Saber si todo el grupo está seleccionado
+const isGrupoSeleccionado = (grupo) => {
+    return grupo.every((item) =>
+        codigoSeleccionado.value.some((c) => c.protarpro === item.protarpro)
+    );
 };
 
 const calcularTotal = (index) => {
@@ -371,6 +527,61 @@ const buscarPaciente = async () => {
         console.error('❌ Error buscando paciente:', err);
     }
 };
+
+const aplicarFormulaLateralidad = () => {
+    // 1. Agrupar por procedimiento (protarpro) y lateralidad
+    const agrupados = {}
+    cotizacion.value.items.forEach((item, idx) => {
+        const key = `${item.codigo}-${item.lateralidad}`
+        if (!agrupados[key]) agrupados[key] = []
+        agrupados[key].push({ ...item, index: idx })
+    })
+
+    // 2. Separar por ojo
+    const porOjo = { derecha: [], izquierda: [] }
+    Object.values(agrupados).forEach(items => {
+        if (!items.length) return
+
+        const lateralidad = items[0].lateralidad
+        if (lateralidad === 'derecha' || lateralidad === 'ambos') porOjo.derecha.push(items)
+        if (lateralidad === 'izquierda' || lateralidad === 'ambos') porOjo.izquierda.push(items)
+    })
+
+    // 3. Función para aplicar porcentajes en un ojo
+    const aplicarPorOjo = (listaProcedimientos, factorOjo = 1) => {
+        // Ordenar procedimientos por valor de "Derechos clínicos"
+        listaProcedimientos.sort((a, b) => {
+            const valA = a.find(it => it.connom?.includes("DERECHOS CLINICOS"))?.valor || 0
+            const valB = b.find(it => it.connom?.includes("DERECHOS CLINICOS"))?.valor || 0
+            return valB - valA
+        })
+
+        listaProcedimientos.forEach((proc, i) => {
+            let porcentaje = 0
+            if (i === 0) porcentaje = 1
+            else if (i === 1) porcentaje = 0.5
+            else if (i === 2) porcentaje = 0.25
+            else porcentaje = 0
+
+            proc.forEach(item => {
+                const nuevoValor = item.valor * porcentaje * factorOjo
+                cotizacion.value.items[item.index].valor_con_descuento = nuevoValor
+            })
+        })
+    }
+
+    // 4. Decidir reglas según ojo
+    if (porOjo.derecha.length && !porOjo.izquierda.length) {
+        aplicarPorOjo(porOjo.derecha, 1)
+    } else if (porOjo.izquierda.length && !porOjo.derecha.length) {
+        aplicarPorOjo(porOjo.izquierda, 1)
+    } else {
+        // Ambos ojos: derecho 100%, izquierdo 75%
+        aplicarPorOjo(porOjo.derecha, 1)
+        aplicarPorOjo(porOjo.izquierda, 0.75)
+    }
+}
+
 
 const guardarCotizacion = async () => {
     try {
@@ -425,3 +636,15 @@ const guardarCotizacion = async () => {
 
 
 </script>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+</style>

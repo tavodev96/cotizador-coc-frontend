@@ -3,11 +3,11 @@
           <DashboardWelcomeCard />
           <DashboardInboxCard />
         </div>
-        <div class="flex flex-row h-64 mt-6 space-x-6">
+        <!-- <div class="flex flex-row h-64 mt-6 space-x-6">
           <DashboardStatCard>a</DashboardStatCard>
           <DashboardStatCard>b</DashboardStatCard>
           <DashboardStatCard>c</DashboardStatCard>
-        </div>
+        </div> -->
 </template>
 
 <script setup>

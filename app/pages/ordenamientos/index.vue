@@ -95,7 +95,7 @@ const pushNotification = (type, message, title) => {
             <Notification :item="item" :icons="filledIcons" />
         </Notivue>
         <div class="mb-4 flex gap-2">
-            <input v-model="search" placeholder="Buscar por número de historia" class="border px-2 py-1" />
+            <input v-model="search" placeholder="N° identificación paciente" class="border px-2 py-1" />
             <input type="date" v-model="fechaInicio" class="border px-2 py-1" />
             <input type="date" v-model="fechaFin" class="border px-2 py-1" />
             <button @click="fetchData" class="bg-blue-500 text-white px-4 py-1 rounded">
