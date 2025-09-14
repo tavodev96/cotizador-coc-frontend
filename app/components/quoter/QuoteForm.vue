@@ -398,10 +398,14 @@ const buscarCodigo = async (codigo, index) => {
         if (data.value.length === 1) {
             // ✅ Solo un resultado, lo asignamos directo
             const unico = data.value[0];
+            console.log("👉 Código único encontrado:", unico);
+
             Object.assign(cotizacion.value.items[index], {
                 codigo: unico.protarpro,
                 nombre: unico.actnom,
                 valor: unico.protarval,
+                concepto: unico.protarcon,
+                connom: unico.connom,
                 descuento: null
             });
         } else {
@@ -443,6 +447,8 @@ const confirmarCodigo = () => {
                 codigo: codigo.protarpro,
                 nombre: codigo.actnom,
                 valor: codigo.protarcon === "HMDQ" && tieneHMDQ === false ? 0 : codigo.protarval,
+                concepto: codigo.protarcon,
+                connom: codigo.connom,
                 descuento: 0
             };
 
@@ -457,6 +463,8 @@ const confirmarCodigo = () => {
             cotizacion.value.items.push({
                 codigo: codigoBase,
                 nombre: "HONORARIOS CIRUJANO",
+                concepto: "",
+                connom: "",
                 valor: 0,
                 descuento: 0
             });
@@ -550,11 +558,16 @@ const aplicarFormulaLateralidad = () => {
     // 3. Función para aplicar porcentajes en un ojo
     const aplicarPorOjo = (listaProcedimientos, factorOjo = 1) => {
         // Ordenar procedimientos por valor de "Derechos clínicos"
+        console.log("👉 Antes de ordenar:", listaProcedimientos);
+
         listaProcedimientos.sort((a, b) => {
             const valA = a.find(it => it.connom?.includes("DERECHOS CLINICOS"))?.valor || 0
             const valB = b.find(it => it.connom?.includes("DERECHOS CLINICOS"))?.valor || 0
             return valB - valA
         })
+
+        console.log("👉 Después de ordenar:", listaProcedimientos);
+
 
         listaProcedimientos.forEach((proc, i) => {
             let porcentaje = 0
@@ -595,7 +608,7 @@ const guardarCotizacion = async () => {
                 codigo: item.codigo,
                 nombre: item.nombre,
                 lateralidad: item.lateralidad,
-                valor: Number(item.valor)
+                valor: Number(item.valor_con_descuento || item.valor)
             }))
         };
 
@@ -613,18 +626,22 @@ const guardarCotizacion = async () => {
             };
         }
 
-        const { data, status, error, refresh, clear } = await useAsyncData('cotizacion', () => useSanctumFetch('/api/cotizaciones', {
+        const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
             method: 'POST',
             body: payload,
-        }));
+        });
+        console.log("👉 Respuesta al guardar cotización:", data);
 
-        console.log('✅ Respuesta al guardar:', data.value)
+        if (!data.value) {
+            pushNotification('error', error.value?.message || 'Error al guardar la cotización', 'Error');
+            return;
+        }
 
-        if (data.value.status.value !== 'success') {
-            pushNotification('error', 'Error al guardar la cotización', 'Error');
-            return
+        if (!data.value.success) {
+            pushNotification('error', data.value.message || 'Error al guardar la cotización', 'Error');
+            return;
         } else {
-            pushNotification('success', `Cotización creada con código:\n${data.value.data.value.codigo}`, 'Éxito');
+            pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
         }
 
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }

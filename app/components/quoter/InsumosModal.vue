@@ -65,7 +65,7 @@ const totalPaginas = computed(() =>
 
 const buscarInsumos = async () => {
   try {
-    const { data } = await useSanctumFetch(`/api/insumos?search=${query.value}`)
+    const { data } = await useSanctumFetch(`/api/tarifas/insumos?search=${query.value}`)
     resultados.value = data.value || []
     paginaActual.value = 1
   } catch (err) {
