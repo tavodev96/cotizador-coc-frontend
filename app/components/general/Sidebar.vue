@@ -7,9 +7,9 @@
     </div>
     <div class="bg-white rounded-xl shadow-lg mb-6 px-6 py-4">
       <SidebarLink label="Ordenamientos" link="/ordenamientos" />
-      <SidebarLink label="Tarifas" link="/tarifas" />
-      <SidebarLink label="Insumos" link="/insumos" />
-      <SidebarLink label="Lentes" link="/lentes" />
+      <SidebarLink label="Procedimientos" link="/tarifas/procedimientos" />
+      <SidebarLink label="Insumos" link="/tarifas/insumos" />
+      <SidebarLink label="Lentes" link="/tarifas/lentes" />
       <!-- <SidebarLink label="Settings" link="/settings" /> -->
     </div>
     <div class="bg-white rounded-xl shadow-lg mb-6 px-6 py-4">
