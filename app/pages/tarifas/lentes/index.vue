@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { items, pagination, search, concepto, loading, fetchTarifas } = useTarifas('insumos')
+const { items, pagination, search, loading, fetchTarifas } = useTarifas('lentes')
 
 onMounted(() => {
   fetchTarifas()
@@ -12,7 +12,6 @@ const handleSearch = () => {
 
 const clearFilters = () => {
   search.value = ''
-  concepto.value = ''
   pagination.value.page = 1
   fetchTarifas()
 }
@@ -25,7 +24,7 @@ const changePage = (page: number) => {
 
 <template>
   <div class="p-6">
-    <!-- Buscador y filtros -->
+    <!-- Buscador -->
     <div class="flex gap-2 mb-4">
       <input
         v-model="search"
@@ -33,17 +32,6 @@ const changePage = (page: number) => {
         placeholder="Buscar por código o nombre..."
         class="border rounded p-2 w-1/3"
       />
-
-      <!-- <select
-        v-model="concepto"
-        @change="fetchTarifas"
-        class="border p-2 rounded"
-      >
-        <option value="" selected>-- Seleccione un concepto --</option>
-        <option value="DP">Derechos clínicos</option>
-        <option value="HM">Honorarios médicos</option>
-        <option value="HA">Anestesiología</option>
-      </select> -->
 
       <button
         @click="handleSearch"
@@ -60,7 +48,7 @@ const changePage = (page: number) => {
       </button>
 
       <button
-        v-if="search || concepto"
+        v-if="search"
         @click="clearFilters"
         class="bg-red-500 text-white px-4 py-2 rounded"
       >
