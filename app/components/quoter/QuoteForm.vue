@@ -115,14 +115,26 @@
                     <div v-for="(insumo, index) in cotizacion.insumos" :key="index"
                         class="grid grid-cols-12 gap-2 mb-2 items-center">
 
-                        <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded col-span-2"
+                        <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded col-span-1"
+                            disabled />
+                        <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4"
                             disabled />
 
-                        <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-6"
-                            disabled />
+                        <!-- Valor unitario -->
+                        <input v-model.number="insumo.valor" placeholder="Valor" type="number"
+                            class="p-2 border rounded col-span-2" disabled />
 
+                        <!-- Cantidad -->
                         <input v-model.number="insumo.cantidad" placeholder="Cantidad" type="number" min="1"
                             class="p-2 border rounded col-span-2" />
+
+                        <!-- Subtotal calculado -->
+                        <span class="col-span-2 text-right font-semibold">
+                            {{ (insumo.cantidad * insumo.valor).toLocaleString('es-CO', {
+                                style: 'currency', currency:
+                                    'COP'
+                            }) }}
+                        </span>
 
                         <button @click="eliminarInsumo(index)"
                             class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
@@ -133,11 +145,62 @@
                     </button>
                 </div>
 
+                <!-- lentes -->
+                <div class="md:col-span-2 mt-6">
+                    <h3 class="text-lg font-bold mb-2">Lentes</h3>
+
+                    <div v-for="(lente, index) in cotizacion.lentes" :key="index"
+                        class="grid grid-cols-12 gap-2 mb-2 items-center">
+
+                        <!-- Código -->
+                        <input v-model="lente.codigo" placeholder="Código" class="p-2 border rounded col-span-1"
+                            disabled />
+
+                        <!-- Nombre -->
+                        <input v-model="lente.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4"
+                            disabled />
+
+                        <!-- Valor unitario -->
+                        <input v-model.number="lente.valor" placeholder="Valor" type="number"
+                            class="p-2 border rounded col-span-2" disabled />
+
+                        <!-- Cantidad -->
+                        <input v-model.number="lente.cantidad" placeholder="Cantidad" type="number" min="1"
+                            class="p-2 border rounded col-span-2" />
+
+                        <!-- Subtotal calculado -->
+                        <span class="col-span-2 text-right font-semibold">
+                            {{ (lente.cantidad * lente.valor).toLocaleString('es-CO', {
+                                style: 'currency',
+                            currency: 'COP'
+                            }) }}
+                        </span>
+
+                        <!-- Botón eliminar -->
+                        <button @click="eliminarLente(index)"
+                            class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
+                    </div>
+
+                    <!-- Botón abrir modal -->
+                    <button type="button" @click="abrirModalLentes" class="mt-2 text-sm text-blue-600 hover:underline">
+                        + Agregar lente
+                    </button>
+                </div>
+
+                <!-- Modal -->
+                <QuoterLentesModal v-if="showModalLentes" :show="showModalLentes" @close="showModalLentes = false"
+                    @select="agregarLentes" />
+
+
                 <QuoterInsumosModal :show="showInsumosModal" @close="showInsumosModal = false"
                     @select="agregarInsumo" />
 
-                <div class="mt-4 text-right text-lg font-bold">
-                    Total: ${{ total }}
+                <div class="mt-4 text-right text-xl font-bold">
+                    <!-- Valor Total cotización: {{ total.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }) }} -->
+                    Valor total cotización:{{ totalCotizacion.toLocaleString('es-CO', {
+                        style: 'currency', currency:
+                            'COP'
+                    }) }}
                 </div>
                 <label class="font-semibold mt-4 block">Observaciones</label>
                 <textarea v-model="cotizacion.observaciones" class="w-full h-24 border rounded p-2"></textarea>
@@ -238,6 +301,7 @@ const cotizacion = ref({
     observaciones: '',
     items: [],
     insumos: [],
+    lentes: [],
     total: 0
 })
 
@@ -284,6 +348,12 @@ const abrirModalInsumos = () => {
     showInsumosModal.value = true
 }
 
+const showModalLentes = ref(false)
+const abrirModalLentes = () => {
+  showModalLentes.value = true
+}
+
+
 const resultadosPaginados = computed(() => {
     return resultadosCodigo.value
 })
@@ -316,8 +386,6 @@ onMounted(async () => {
         console.error('❌ Error cargando catálogos:', err)
     }
 })
-
-
 
 const syncEntidadFromQuery = () => {
     const q = route.query?.entidad
@@ -510,6 +578,30 @@ const calcularTotal = (index) => {
     cotizacion.value.items[index] = { ...item };
 }
 
+const totalProcedimientos = computed(() => {
+    return cotizacion.value.items.reduce((acc, item) => {
+        const valor = item.valor_con_descuento ?? item.valor;
+        return acc + (valor * (item.cantidad ?? 1));
+    }, 0);
+});
+
+const totalInsumos = computed(() => {
+    return cotizacion.value.insumos?.reduce((acc, insumo) => {
+        return acc + (insumo.valor * (insumo.cantidad ?? 1));
+    }, 0) || 0;
+});
+
+const totalLentes = computed(() => {
+  return cotizacion.value.lentes?.reduce((acc, lente) => {
+    return acc + (lente.valor * (lente.cantidad ?? 1));
+  }, 0) || 0;
+});
+
+const totalCotizacion = computed(() => {
+  return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
+});
+
+
 const buscarPaciente = async () => {
 
     try {
@@ -595,61 +687,129 @@ const aplicarFormulaLateralidad = () => {
     }
 }
 
+const agregarInsumo = (seleccionados) => {
+    console.log("👉 Insumos seleccionados:", seleccionados);
+
+    seleccionados.forEach((insumo) => {
+        // ✅ evitar duplicados
+        if (!cotizacion.value.insumos.some(i => i.codigo === insumo.codigo)) {
+            cotizacion.value.insumos.push({
+                codigo: insumo.codigo,
+                nombre: insumo.nombre,
+                cantidad: 1,
+                valor: insumo.valor
+            })
+        }
+    })
+
+    // cerrar modal después de agregar
+    showInsumosModal.value = false
+}
+
+const eliminarInsumo = (index) => {
+    cotizacion.value.insumos.splice(index, 1)
+}
+
+const agregarLentes = (seleccionados) => {
+    console.log("👉 Lentes seleccionados:", seleccionados);
+
+    seleccionados.forEach((lente) => {
+        if (!cotizacion.value.lentes.some(l => l.codigo === lente.codigo)) {
+            cotizacion.value.lentes.push({
+                codigo: lente.codigo,
+                nombre: lente.nombre,
+                cantidad: 1,
+                valor: lente.valor
+            })
+        }
+    })
+
+    showModalLentes.value = false
+}
+
+const eliminarLente = (index) => {
+    cotizacion.value.lentes.splice(index, 1)
+}
 
 const guardarCotizacion = async () => {
-    try {
-        let payload = {
-            tipo_gestion: cotizacion.value.tipo_gestion,
-            medico_id: cotizacion.value.medico_id,
-            entidad_id: paciente.value.entidad_id,
-            consultorio_id: cotizacion.value.consultorio_id,
-            observaciones: cotizacion.value.observaciones,
-            items: cotizacion.value.items.map(item => ({
-                codigo: item.codigo,
-                nombre: item.nombre,
-                lateralidad: item.lateralidad,
-                valor: Number(item.valor_con_descuento || item.valor)
-            }))
-        };
+  try {
+    let payload = {
+      tipo_gestion: cotizacion.value.tipo_gestion,
+      medico_id: cotizacion.value.medico_id,
+      entidad_id: paciente.value.entidad_id,
+      consultorio_id: cotizacion.value.consultorio_id,
+      observaciones: cotizacion.value.observaciones,
 
-        if (paciente.value.id) {
-            payload.paciente_id = paciente.value.id;
-        } else {
-            payload = {
-                ...payload,
-                nombre_paciente: paciente.value.nombres,
-                apellidos_paciente: paciente.value.apellidos,
-                tipo_identificacion: paciente.value.tipo_identificacion,
-                numero_identificacion: paciente.value.numero_identificacion,
-                correo: paciente.value.correo,
-                telefono: paciente.value.telefono
-            };
-        }
+      // 🔹 Procedimientos
+      items: cotizacion.value.items.map(item => ({
+        codigo: item.codigo,
+        nombre: item.nombre,
+        lateralidad: item.lateralidad,
+        valor: Number(item.valor_con_descuento || item.valor),
+        cantidad: item.cantidad ?? 1
+      })),
 
-        const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
-            method: 'POST',
-            body: payload,
-        });
-        console.log("👉 Respuesta al guardar cotización:", data);
+      // 🔹 Insumos
+      insumos: cotizacion.value.insumos.map(insumo => ({
+        codigo: insumo.codigo,
+        nombre: insumo.nombre,
+        valor: Number(insumo.valor),
+        cantidad: insumo.cantidad ?? 1,
+        tipo: 'I'
+      })),
 
-        if (!data.value) {
-            pushNotification('error', error.value?.message || 'Error al guardar la cotización', 'Error');
-            return;
-        }
+      // 🔹 Lentes
+      lentes: cotizacion.value.lentes.map(lente => ({
+        codigo: lente.codigo,
+        nombre: lente.nombre,
+        valor: Number(lente.valor),
+        cantidad: lente.cantidad ?? 1,
+        tipo: 'L'
+      }))
+    };
 
-        if (!data.value.success) {
-            pushNotification('error', data.value.message || 'Error al guardar la cotización', 'Error');
-            return;
-        } else {
-            pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
-        }
-
-        paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
-        cotizacion.value = { tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [] }
-    } catch (err) {
-        console.error('❌ Error inesperado:', err)
+    // Si existe paciente guardado
+    if (paciente.value.id) {
+      payload.paciente_id = paciente.value.id;
+    } else {
+      payload = {
+        ...payload,
+        nombre_paciente: paciente.value.nombres,
+        apellidos_paciente: paciente.value.apellidos,
+        tipo_identificacion: paciente.value.tipo_identificacion,
+        numero_identificacion: paciente.value.numero_identificacion,
+        correo: paciente.value.correo,
+        telefono: paciente.value.telefono
+      };
     }
+
+    const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
+      method: 'POST',
+      body: payload,
+    });
+    console.log("👉 Respuesta al guardar cotización:", data);
+
+    if (!data.value) {
+      pushNotification('error', error.value?.message || 'Error al guardar la cotización', 'Error');
+      return;
+    }
+
+    if (!data.value.success) {
+      pushNotification('error', data.value.message || 'Error al guardar la cotización', 'Error');
+      return;
+    } else {
+      pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
+    }
+
+    // Reset
+    paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
+    cotizacion.value = { tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
+
+  } catch (err) {
+    console.error('❌ Error inesperado:', err)
+  }
 }
+
 
 
 </script>

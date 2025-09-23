@@ -16,7 +16,7 @@
                v-model="insumosSeleccionados"
                class="mr-2" />
         <label :for="'insumo-' + insumo.id" class="cursor-pointer">
-          {{ insumo.codigo }} - {{ insumo.nombre }} <br/> (Stock: {{ insumo.stock }})
+          {{ insumo.codigo }} - {{ insumo.nombre }} <br/> (Stock: {{ insumo.stock }}) - (Precio: {{ insumo.valor | currency }})
         </label>
       </div>
 
@@ -80,10 +80,12 @@ const changePage = (page: number) => {
 const confirmar = () => {
   if (insumosSeleccionados.value.length > 0) {
     emit('select', insumosSeleccionados.value)
+    emit('close')   // 🚨 cerrar modal automáticamente
     insumosSeleccionados.value = []
     search.value = ''
   }
 }
+
 
 const deseleccionarTodos = () => {
   insumosSeleccionados.value = []
