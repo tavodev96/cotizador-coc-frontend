@@ -172,7 +172,7 @@
                         <span class="col-span-2 text-right font-semibold">
                             {{ (lente.cantidad * lente.valor).toLocaleString('es-CO', {
                                 style: 'currency',
-                            currency: 'COP'
+                                currency: 'COP'
                             }) }}
                         </span>
 
@@ -208,6 +208,12 @@
                     class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                     Guardar cotización
                 </button>
+
+                <NuxtLink :to="`/cotizacion/imprimir/${3}`"
+                    class="bg-green-600 text-white px-3 py-2 rounded">
+                    Vista de impresión
+                </NuxtLink>
+
 
             </div>
         </div>
@@ -350,7 +356,7 @@ const abrirModalInsumos = () => {
 
 const showModalLentes = ref(false)
 const abrirModalLentes = () => {
-  showModalLentes.value = true
+    showModalLentes.value = true
 }
 
 
@@ -592,13 +598,13 @@ const totalInsumos = computed(() => {
 });
 
 const totalLentes = computed(() => {
-  return cotizacion.value.lentes?.reduce((acc, lente) => {
-    return acc + (lente.valor * (lente.cantidad ?? 1));
-  }, 0) || 0;
+    return cotizacion.value.lentes?.reduce((acc, lente) => {
+        return acc + (lente.valor * (lente.cantidad ?? 1));
+    }, 0) || 0;
 });
 
 const totalCotizacion = computed(() => {
-  return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
+    return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
 });
 
 
@@ -732,82 +738,82 @@ const eliminarLente = (index) => {
 }
 
 const guardarCotizacion = async () => {
-  try {
-    let payload = {
-      tipo_gestion: cotizacion.value.tipo_gestion,
-      medico_id: cotizacion.value.medico_id,
-      entidad_id: paciente.value.entidad_id,
-      consultorio_id: cotizacion.value.consultorio_id,
-      observaciones: cotizacion.value.observaciones,
+    try {
+        let payload = {
+            tipo_gestion: cotizacion.value.tipo_gestion,
+            medico_id: cotizacion.value.medico_id,
+            entidad_id: paciente.value.entidad_id,
+            consultorio_id: cotizacion.value.consultorio_id,
+            observaciones: cotizacion.value.observaciones,
 
-      // 🔹 Procedimientos
-      items: cotizacion.value.items.map(item => ({
-        codigo: item.codigo,
-        nombre: item.nombre,
-        lateralidad: item.lateralidad,
-        valor: Number(item.valor_con_descuento || item.valor),
-        cantidad: item.cantidad ?? 1
-      })),
+            // 🔹 Procedimientos
+            items: cotizacion.value.items.map(item => ({
+                codigo: item.codigo,
+                nombre: item.nombre,
+                lateralidad: item.lateralidad,
+                valor: Number(item.valor_con_descuento || item.valor),
+                cantidad: item.cantidad ?? 1
+            })),
 
-      // 🔹 Insumos
-      insumos: cotizacion.value.insumos.map(insumo => ({
-        codigo: insumo.codigo,
-        nombre: insumo.nombre,
-        valor: Number(insumo.valor),
-        cantidad: insumo.cantidad ?? 1,
-        tipo: 'I'
-      })),
+            // 🔹 Insumos
+            insumos: cotizacion.value.insumos.map(insumo => ({
+                codigo: insumo.codigo,
+                nombre: insumo.nombre,
+                valor: Number(insumo.valor),
+                cantidad: insumo.cantidad ?? 1,
+                tipo: 'I'
+            })),
 
-      // 🔹 Lentes
-      lentes: cotizacion.value.lentes.map(lente => ({
-        codigo: lente.codigo,
-        nombre: lente.nombre,
-        valor: Number(lente.valor),
-        cantidad: lente.cantidad ?? 1,
-        tipo: 'L'
-      }))
-    };
+            // 🔹 Lentes
+            lentes: cotizacion.value.lentes.map(lente => ({
+                codigo: lente.codigo,
+                nombre: lente.nombre,
+                valor: Number(lente.valor),
+                cantidad: lente.cantidad ?? 1,
+                tipo: 'L'
+            }))
+        };
 
-    // Si existe paciente guardado
-    if (paciente.value.id) {
-      payload.paciente_id = paciente.value.id;
-    } else {
-      payload = {
-        ...payload,
-        nombre_paciente: paciente.value.nombres,
-        apellidos_paciente: paciente.value.apellidos,
-        tipo_identificacion: paciente.value.tipo_identificacion,
-        numero_identificacion: paciente.value.numero_identificacion,
-        correo: paciente.value.correo,
-        telefono: paciente.value.telefono
-      };
+        // Si existe paciente guardado
+        if (paciente.value.id) {
+            payload.paciente_id = paciente.value.id;
+        } else {
+            payload = {
+                ...payload,
+                nombre_paciente: paciente.value.nombres,
+                apellidos_paciente: paciente.value.apellidos,
+                tipo_identificacion: paciente.value.tipo_identificacion,
+                numero_identificacion: paciente.value.numero_identificacion,
+                correo: paciente.value.correo,
+                telefono: paciente.value.telefono
+            };
+        }
+
+        const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
+            method: 'POST',
+            body: payload,
+        });
+        console.log("👉 Respuesta al guardar cotización:", data);
+
+        if (!data.value) {
+            pushNotification('error', error.value?.message || 'Error al guardar la cotización', 'Error');
+            return;
+        }
+
+        if (!data.value.success) {
+            pushNotification('error', data.value.message || 'Error al guardar la cotización', 'Error');
+            return;
+        } else {
+            pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
+        }
+
+        // Reset
+        paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
+        cotizacion.value = { tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
+
+    } catch (err) {
+        console.error('❌ Error inesperado:', err)
     }
-
-    const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
-      method: 'POST',
-      body: payload,
-    });
-    console.log("👉 Respuesta al guardar cotización:", data);
-
-    if (!data.value) {
-      pushNotification('error', error.value?.message || 'Error al guardar la cotización', 'Error');
-      return;
-    }
-
-    if (!data.value.success) {
-      pushNotification('error', data.value.message || 'Error al guardar la cotización', 'Error');
-      return;
-    } else {
-      pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
-    }
-
-    // Reset
-    paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
-    cotizacion.value = { tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
-
-  } catch (err) {
-    console.error('❌ Error inesperado:', err)
-  }
 }
 
 

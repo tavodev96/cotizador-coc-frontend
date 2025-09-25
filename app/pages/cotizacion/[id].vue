@@ -26,6 +26,8 @@ const fetchDetalle = async () => {
   cotizacion.value = data.value.cotizacion
   historico_estados.value = data.value.estados
   estadoSeleccionado.value = cotizacion.value.estado_id
+
+  console.log(cotizacion.value);
 }
 
 const pushNotification = (type, message, title) => {
@@ -106,6 +108,17 @@ const formatoFecha = (fechaISO) => {
 
   return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
 }
+
+const totalConDetalles = computed(() => {
+  if (!cotizacion.value) return 0
+
+  const totalDetalles = cotizacion.value.detalles?.reduce(
+    (acc, d) => acc + (parseFloat(d.valor) || 0),
+    0
+  ) || 0
+
+  return (parseFloat(cotizacion.value.total) || 0) + totalDetalles
+})
 </script>
 
 <template>
@@ -161,9 +174,24 @@ const formatoFecha = (fechaISO) => {
           {{ item.lateralidad }} - ${{ item.valor }}
         </li>
       </ul>
-      <p class="mt-4"><span>
-          <b>Total:</b> <span class="text-[#172983] font-bold text-2xl">${{ cotizacion?.total }}</span>
-      </span></p>
+      <h3 class="mt-4 font-semibold">Insumos</h3>
+      <ul>
+        <li v-for="detalle in cotizacion?.detalles" :key="detalle.id" class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+            viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
+            <path fill="#1E9C07"
+              d="m10.6 16.2l7.05-7.05l-1.4-1.4l-5.65 5.65l-2.85-2.85l-1.4 1.4zM5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM5 5v14z" />
+          </svg>
+          {{ detalle.codigo }} - {{ detalle.nombre }} - ${{ detalle.valor }}<span v-if="detalle.tipo == 'L'" class="text-blue-600 font-bold">- (LENTE)</span>
+        </li>
+      </ul>
+      <p class="mt-4">
+        <span>
+          <b>Total:</b> <span class="text-[#172983] font-bold text-2xl">
+            ${{ totalConDetalles }}
+          </span>
+        </span>
+      </p>
     </div>
 
     <h3 class="mt-4 font-semibold">Comentarios</h3>
