@@ -1,6 +1,9 @@
 <template>
     <div class="font-sans text-gray-900 antialiased">
         <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0">
+            <Notivue v-slot="item">
+                <Notification :item="item" :icons="filledIcons" class="text-2xl" />
+            </Notivue>
             <div class="mb-4">
                 <a href="/">
                     <img src="/img/logo_clinica_oftalmologia.png" class="w-64" alt="Clínica_de_oftalmologia_de_Cali">
@@ -53,35 +56,67 @@
                                     Forgot your password?
                                 </a> -->
 
-                        <button type="submit"
+                        <button type="submit" v-if="!validatingCredentials"
                             class='inline-flex items-center px-6 py-2 bg-[#1f2937] border border-transparent rounded-md font-semibold text-base text-white uppercase tracking-widest hover:bg-zinc-900 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150'>
                             Acceder
                         </button>
 
+                        <div v-else class="flex justify-center items-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg"
+                                fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            <span class="text-white">Analizando credenciales...</span>
+                        </div>
                     </div>
-
                 </form>
             </div>
+
+            <div v-if="errorMessages" class="mt-4 text-red-500 text-sm text-center" v-html="errorMessages"></div>
         </div>
     </div>
 </template>
 
 <script setup>
+import { Notivue, Notification, filledIcons } from 'notivue'
+
 definePageMeta({
-  layout: false,
+    layout: false,
 });
 
 const { login } = useSanctumAuth()
 
 const obj = ref({});
+const errorMessages = ref('');
+const validatingCredentials = ref(false);
 
 const submit = async () => {
+    validatingCredentials.value = true;
+    errorMessages.value = '';
+    
     const credentials = {
         email: obj.value.email,
         password: obj.value.password,
     }
 
-    await login(credentials)
+    try {
+        await login(credentials)
+    } catch (error) {
+        console.log(error.response._data.errors);
+
+        const errors = error.response._data.errors;
+
+        if (errors) {
+            pushNotification('error', 'Estas credenciales no coinciden con nuestros registros.', 'Error de autenticación')
+        }
+    } finally {
+        validatingCredentials.value = false;
+        obj.value = { email: '', password: '' }
+    }
 }
 
 const passwordInputRef = ref(null)
@@ -97,4 +132,23 @@ const passwordInput = () => {
     }
 }
 
+const pushNotification = (type, message, title) => {
+    push[type]({
+        title: title,
+        message: message,
+        ariaRole: 'alert'
+    })
+}
 </script>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+</style>

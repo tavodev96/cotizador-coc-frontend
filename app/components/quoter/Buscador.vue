@@ -61,7 +61,7 @@ watch(() => props.reset, () => {
         <input v-model="filtros.documento" placeholder="Documento" class="w-1/4 border p-1" />
         <input type="date" v-model="filtros.fecha_inicio" class="w-1/4 border p-1" />
         <input type="date" v-model="filtros.fecha_fin" class="w-1/4 border p-1" />
-        <button @click="buscar" class="w-1/4 bg-blue-500 text-white px-3 py-1" :disabled="loading">
+        <button @click="buscar" class="w-1/4 bg-[#162983] text-white px-3 py-1" :disabled="loading">
             {{ loading ? 'Buscando...' : 'Buscar' }}
         </button>
     </div>
