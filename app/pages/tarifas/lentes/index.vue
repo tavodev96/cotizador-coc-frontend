@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+    middleware: ['sanctum:auth'],
+})
+
 const { items, pagination, search, loading, fetchTarifas } = useTarifas('lentes')
 
 onMounted(() => {

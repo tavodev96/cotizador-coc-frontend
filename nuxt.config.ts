@@ -14,6 +14,9 @@ export default defineNuxtConfig({
     'nuxt-auth-sanctum',
     'notivue/nuxt'
   ],
+  plugins: [
+    '~/plugins/tippy.ts'
+  ],
   css: [
     'notivue/notification.css',
     'notivue/animations.css'

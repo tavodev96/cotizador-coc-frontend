@@ -35,6 +35,7 @@
 </template>
 <script setup>
 definePageMeta({
+    middleware: ['sanctum:auth'],
     layout: 'public'
 })
 </script>

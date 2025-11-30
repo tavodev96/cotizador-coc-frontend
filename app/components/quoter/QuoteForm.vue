@@ -63,8 +63,10 @@
                         <input v-model="paciente.numero_identificacion" type="text"
                             class="w-full h-12 border rounded p-2" :disabled="paciente.id" />
                         <button type="button" @click="buscarPaciente"
-                            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-                            Buscar
+                            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                            :disabled="loadingPaciente">
+                            <span v-if="loadingPaciente">Buscando...</span>
+                            <span v-else>Buscar</span>
                         </button>
                     </div>
                 </div>
@@ -121,8 +123,8 @@
                         </select>
                     </div>
                     <div v-if="isCodificacion" class="w-1/2">
-                        <label class="font-semibold">código</label>
-                        <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border rounded p-2"/>
+                        <label class="font-semibold">Número de autorización</label>
+                        <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border rounded p-2" />
                     </div>
                 </div>
                 <!-- :disabled="isdoctorDisabled" -->
@@ -138,12 +140,25 @@
                 </select>
 
                 <div class="md:col-span-2 mt-4">
-                    <h3 class="text-lg font-bold mb-2">Procedimientos</h3>
+                    <div class="flex items-center gap-2 mb-2">
+                        <h3 class="text-lg font-bold">Procedimientos</h3>
+                        <div v-if="loadingBuscarCodigo" class="w-fit flex justify-center items-center gap-2 bg-blue-600 text-white px-2 py-1 rounded">
+                            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <span>Buscando código...</span>
+                        </div>
+                    </div>
                     <div v-for="(item, index) in cotizacion.items" :key="index"
                         class="grid grid-cols-12 gap-2 mb-2 items-center">
 
                         <input v-model="item.codigo" @blur="buscarCodigo(item.codigo, index)" placeholder="Código"
-                            class="p-2 border rounded" :class="[{'col-span-3': isCodificacion, 'col-span-2': !isCodificacion}]" />
+                            class="p-2 border rounded"
+                            :class="[{ 'col-span-3': isCodificacion, 'col-span-2': !isCodificacion }]" />
 
 
                         <input v-model="item.nombre" placeholder="Nombre"
@@ -181,18 +196,19 @@
                     <div v-for="(insumo, index) in cotizacion.insumos" :key="index"
                         class="grid grid-cols-12 gap-2 mb-2 items-center">
 
-                        <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded" :class="[{'col-span-3': isCodificacion, 'col-span-1': !isCodificacion}]"
-                            disabled />
-                        <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4" :class="[{'col-span-6': isCodificacion, 'col-span-4': !isCodificacion}]" disabled />
+                        <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded"
+                            :class="[{ 'col-span-3': isCodificacion, 'col-span-1': !isCodificacion }]" disabled />
+                        <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4"
+                            :class="[{ 'col-span-6': isCodificacion, 'col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
                         <input v-show="!isCodificacion" v-model.number="insumo.valor" type="hidden" />
-                        <input v-show="!isCodificacion" :value="formatearNumero(insumo.valor)" type="text" class="p-2 border rounded col-span-2"
-                            disabled placeholder="Valor" />
+                        <input v-show="!isCodificacion" :value="formatearNumero(insumo.valor)" type="text"
+                            class="p-2 border rounded col-span-2" disabled placeholder="Valor" />
 
                         <!-- Cantidad -->
-                        <input v-show="!isCodificacion" v-model.number="insumo.cantidad" placeholder="Cantidad" type="number" min="1"
-                            class="p-2 border rounded col-span-2" />
+                        <input v-show="!isCodificacion" v-model.number="insumo.cantidad" placeholder="Cantidad"
+                            type="number" min="1" class="p-2 border rounded col-span-2" />
 
                         <!-- Subtotal calculado -->
                         <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
@@ -219,19 +235,21 @@
                         class="grid grid-cols-12 gap-2 mb-2 items-center">
 
                         <!-- Código -->
-                        <input v-model="lente.codigo" placeholder="Código" class="p-2 border rounded" :class="[{'col-span-3': isCodificacion, 'col-span-1': !isCodificacion}]" disabled />
+                        <input v-model="lente.codigo" placeholder="Código" class="p-2 border rounded"
+                            :class="[{ 'col-span-3': isCodificacion, 'col-span-1': !isCodificacion }]" disabled />
 
                         <!-- Nombre -->
-                        <input v-model="lente.nombre" placeholder="Nombre" class="p-2 border rounded" :class="[{'col-span-6': isCodificacion, 'col-span-4': !isCodificacion}]" disabled />
+                        <input v-model="lente.nombre" placeholder="Nombre" class="p-2 border rounded"
+                            :class="[{ 'col-span-6': isCodificacion, 'col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
                         <input v-model.number="lente.valor" type="hidden" />
-                        <input v-show="!isCodificacion" :value="formatearNumero(lente.valor)" type="text" class="p-2 border rounded col-span-2"
-                            disabled placeholder="Valor" />
+                        <input v-show="!isCodificacion" :value="formatearNumero(lente.valor)" type="text"
+                            class="p-2 border rounded col-span-2" disabled placeholder="Valor" />
 
                         <!-- Cantidad -->
-                        <input v-show="!isCodificacion" v-model.number="lente.cantidad" placeholder="Cantidad" type="number" min="1"
-                            class="p-2 border rounded col-span-2" />
+                        <input v-show="!isCodificacion" v-model.number="lente.cantidad" placeholder="Cantidad"
+                            type="number" min="1" class="p-2 border rounded col-span-2" />
 
                         <!-- Subtotal calculado -->
                         <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
@@ -260,7 +278,8 @@
                 <QuoterInsumosModal :show="showInsumosModal" @close="showInsumosModal = false"
                     @select="agregarInsumo" />
 
-                <QuoterCodificacion v-if="isCodificacion" @update:valores="valoresCodificacion" class="mt-4" :lentes="totalLentes" />
+                <QuoterCodificacion v-if="isCodificacion" @update:valores="valoresCodificacion" class="mt-4"
+                    :lentes="totalLentes" />
 
                 <div class="mt-4 text-right text-xl font-bold">
                     <!-- Valor Total cotización: {{ total.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }) }} -->
@@ -340,13 +359,7 @@
                             Grabando cotización...
                         </span>
                     </button>
-
-                    <!-- <NuxtLink :to="`/cotizacion/imprimir/${3}`" class="bg-green-600 text-white mt-4 px-4 py-2 rounded">
-                        Vista de impresión
-                    </NuxtLink> -->
                 </div>
-
-
             </div>
         </div>
 
@@ -418,6 +431,10 @@
 
 </template>
 <script setup>
+definePageMeta({
+    middleware: ['sanctum:auth'],
+})
+
 import { Notivue, Notification, filledIcons } from 'notivue'
 const route = useRoute();
 
@@ -471,6 +488,8 @@ const loading = ref(false);
 const isconsultorioDisabled = ref(false);
 const isdoctorDisabled = ref(false);
 const extracting = ref(true);
+const loadingPaciente = ref(false);
+const loadingBuscarCodigo = ref(false);
 
 const toggleGrupo = (protartar) => {
     if (gruposAbiertos.value.has(protartar)) {
@@ -617,6 +636,8 @@ const buscarCodigo = async (codigo, index) => {
     if (!codigo) return;
 
     try {
+        loadingBuscarCodigo.value = true;
+
         const { data, error } = await useSanctumFetch(`/api/codigos/buscar/${codigo}`);
 
         if (!data.value || data.value.length === 0) {
@@ -669,7 +690,10 @@ const buscarCodigo = async (codigo, index) => {
     } catch (err) {
         pushNotification('error', 'Código no encontrado', 'Error');
         console.error("❌ Error buscando código:", err);
+    } finally {
+        loadingBuscarCodigo.value = false;
     }
+
 };
 
 const confirmarCodigo = () => {
@@ -790,6 +814,8 @@ const totalCotizacion = computed(() => {
 
 const buscarPaciente = async () => {
 
+    loadingPaciente.value = true;
+
     try {
         const { data, error } = await useSanctumFetch(`/api/pacientes/${paciente.value.numero_identificacion}`);
 
@@ -807,10 +833,14 @@ const buscarPaciente = async () => {
             paciente.value.correo = p.correo || '';
             paciente.value.telefono = p.telefono || '';
             paciente.value.entidad_id = p.entidad_id || '';
+        } else {
+            pushNotification('error', 'Paciente no encontrado', 'Error');
         }
 
     } catch (err) {
         console.error('❌ Error buscando paciente:', err);
+    } finally {
+        loadingPaciente.value = false;
     }
 };
 

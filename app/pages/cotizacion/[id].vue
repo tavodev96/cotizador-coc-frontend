@@ -5,6 +5,8 @@ definePageMeta({
 
 import { Notivue, Notification, filledIcons } from 'notivue'
 const route = useRoute()
+const router = useRouter()
+
 const cotizacion = ref(null)
 const estadosAdministrativos = ref([]);
 const estadoSeleccionado = ref(null)
@@ -14,19 +16,34 @@ const historico_estados = ref([])
 const mostrarModalHistorico = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
+const loadingEstados = ref(false)
+
+const intendedEstado = ref(null)
+const mostrarModalComentario = ref(false)
+const estadoSeleccionadoTemp = ref(null)
 
 const fetchDetalle = async () => {
-  const { data } = await useSanctumFetch(`/api/cotizacion/${route.params.id}`)
-  cotizacion.value = data.value.cotizacion
-  historico_estados.value = data.value.estados
-  estadoSeleccionado.value = cotizacion.value.estado_id
+  try {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}`)
+    
+    if (error.value) {
+      console.error('Error en fetchDetalle:', error.value)
+      return
+    }
+        
+    // Asignar los datos con un pequeño delay para asegurar reactividad
+    cotizacion.value = { ...data.value.cotizacion }
+    historico_estados.value = [...data.value.estados]
+    estadoSeleccionado.value = cotizacion.value.estado_id
+    estadoSeleccionadoTemp.value = cotizacion.value.estado_id
 
-  console.log(historico_estados.value);
+  } catch (err) {
+    console.error('Error capturado en fetchDetalle:', err)
+  }
 }
 
 const fetchEstados = async () => {
   const { data } = await useSanctumFetch('/api/estados/cotizacion', { method: 'GET' })
-  console.log("Estados administrativos: ", data.value);
   estadosAdministrativos.value = data.value.sort((a, b) => a.orden - b.orden);
 }
 
@@ -45,7 +62,7 @@ const onFileChange = (e) => {
 
 
 const agregarComentario = async () => {
-  if (savingComentario.value) return
+  if (savingComentario.value) return false
   savingComentario.value = true
 
   const formData = new FormData()
@@ -64,7 +81,7 @@ const agregarComentario = async () => {
 
     if (error.value) {
       pushNotification('error', 'No se pudo agregar el comentario', 'Error')
-      return
+      return false
     }
 
     if (data.value?.success) {
@@ -81,28 +98,90 @@ const agregarComentario = async () => {
       }
 
       pushNotification('success', 'Comentario agregado con éxito', 'Éxito')
-
+      return true
     }
+
+    return false
   } finally {
     savingComentario.value = false
   }
 }
 
-const cambiarEstado = async () => {
-  const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
-    method: 'PUT',
-    body: { estado: estadoSeleccionado.value }
-  })
+const realizarCambioEstado = async (estadoId) => {
+  try {
+    loadingEstados.value = true
 
-  if (!data.value.success) {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
+      method: 'PUT',
+      body: { estado: estadoId }
+    })
+
+    if (error.value || !data.value?.success) {
+      pushNotification('error', 'No se pudo cambiar el estado', 'Error')
+      return false
+    }
+
+    // Actualizar el histórico directamente si viene en la respuesta
+    if (data.value.historial) {
+      historico_estados.value = [...data.value.historial]
+    }
+
+    pushNotification('success', 'Estado actualizado con éxito', 'Éxito')
+
+    // Pequeño delay antes de refrescar
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    await router.replace({ path: route.path, query: { _t: Date.now() } })
+    
+    // return true
+  
+  } catch (e) {
+    console.error('Error en realizarCambioEstado:', e)
     pushNotification('error', 'No se pudo cambiar el estado', 'Error')
+    return false
+  } finally {
+    loadingEstados.value = false
+  }
+}
+
+const cambiarEstado = async () => {
+  const nueva = estadoSeleccionadoTemp.value
+  const requiereComentario = [4, 6]
+
+  const estadoActual = cotizacion.value?.estado_id
+
+  intendedEstado.value = nueva
+
+  const requiereComentarioNuevo = requiereComentario.includes(Number(nueva))
+  const requiereComentarioSalida = requiereComentario.includes(Number(estadoActual)) && Number(nueva) !== Number(estadoActual)
+
+  if ((requiereComentarioNuevo || requiereComentarioSalida) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
+    mostrarModalComentario.value = true
+    estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
     return
   }
 
-  historico_estados.value = data.value.historial;
-  mostrarModalHistorico.value = true;
+  await realizarCambioEstado(nueva)
+}
 
-  pushNotification('success', 'Estado actualizado con éxito', 'Éxito')
+const enviarComentarioYEstado = async () => {
+  const ok = await agregarComentario()
+  if (!ok) return
+
+  if (intendedEstado.value) {
+    await realizarCambioEstado(intendedEstado.value)
+    estadoSeleccionadoTemp.value = intendedEstado.value
+  }
+
+  // Cerrar modal y limpiar
+  mostrarModalComentario.value = false
+  intendedEstado.value = null
+}
+
+const cancelarModalComentario = () => {
+  mostrarModalComentario.value = false
+  estadoSeleccionado.value = cotizacion.value?.estado_id || null
+  intendedEstado.value = null
 }
 
 onMounted(async () => {
@@ -119,12 +198,12 @@ onMounted(async () => {
 })
 
 const formatoFecha = (fechaISO) => {
-  if (!fechaISO) return ''; // Maneja fechas nulas
+  if (!fechaISO) return '';
 
   const fecha = new Date(fechaISO);
 
   const dia = String(fecha.getDate()).padStart(2, '0');
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // Los meses en JS van de 0 a 11
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const anio = fecha.getFullYear();
 
   const horas = String(fecha.getHours()).padStart(2, '0');
@@ -185,7 +264,7 @@ const totalConDetalles = computed(() => {
         </svg>
       </span>
       <span class="text-lg font-semibold">
-        Cargando cotización
+        Cargando información...
       </span>
     </div>
   </div>
@@ -195,7 +274,8 @@ const totalConDetalles = computed(() => {
     </Notivue>
     <div class="flex items-center justify-between mb-4">
       <div class="flex flex-col gap-2">
-        <h2 class="text-xl font-bold">Cotización {{ cotizacion?.codigo }}</h2>
+        <h2 class="text-xl font-bold"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
+          cotizacion?.codigo }}</h2>
         <p><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
         <p><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
         <p><span class="font-bold">Estado:</span> <span
@@ -207,14 +287,23 @@ const totalConDetalles = computed(() => {
       <div>
         <div class="mt-4 flex justify-center items-center gap-2">
           <label for="estado" class="font-semibold">Cambiar estado:</label>
-          <select v-model="estadoSeleccionado" id="estado" class="border p-2 rounded-lg w-32">
+          <select v-model="estadoSeleccionadoTemp" id="estado" class="border p-2 rounded-lg w-32">
             <option disabled value="" selected>Estados</option>
             <option v-for="estado in estadosAdministrativos" :value="estado.id" :key="estado.id">
               {{ estado.nombre }}
             </option>
           </select>
-          <button @click="cambiarEstado" class="ml-2 bg-[#172983] text-white px-4 py-2 rounded-lg">
-            Guardar
+          <button @click="cambiarEstado"
+            class="flex justify-center items-center gap-2 ml-2 bg-[#172983] text-white px-4 py-2 rounded-lg"
+            :disabled="loadingEstados">
+            <template v-if="!loadingEstados">Actualizar</template>
+            <template v-else>
+              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              Actualizando...
+            </template>
           </button>
         </div>
 
@@ -230,7 +319,7 @@ const totalConDetalles = computed(() => {
       </div>
     </div>
 
-    <div class="w-fit">
+    <div class="w-full">
       <h3 class="mt-4 font-semibold">Items</h3>
       <ul>
         <li v-for="(item, index) in (cotizacion?.codificacion ?
@@ -313,6 +402,12 @@ const totalConDetalles = computed(() => {
           </li>
         </ul>
       </div>
+      <div>
+        <h3 class="my-2 font-semibold">Observaciones:</h3>
+        <textarea class="w-fit h-fit border rounded p-2 resize-none font-semibold"
+          :disabled="cotizacion?.observaciones">{{
+            cotizacion?.observaciones }}</textarea>
+      </div>
       <p v-show="!cotizacion?.codificacion?.numero_autorizacion" class="mt-4">
         <span>
           <b>Total:</b> <span class="text-[#172983] font-bold text-2xl">
@@ -320,9 +415,16 @@ const totalConDetalles = computed(() => {
           </span>
         </span>
       </p>
+      <div class="mt-4 flex justify-end items-center">
+        <div v-if="cotizacion">
+          <NuxtLink :to="`/cotizacion/imprimir/${cotizacion.id}`"
+            class="bg-green-600 text-white mt-4 px-4 py-2 rounded">
+            Imprimir {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }}</NuxtLink>
+        </div>
+      </div>
     </div>
 
-    <h3 class="mt-4 font-semibold">Comentarios</h3>
+    <h3 class="mt-4 text-xl font-bold">Comentarios</h3>
     <div v-for="com in cotizacion?.comentarios" :key="com.id" class="border p-2 mb-2">
       <p><b>{{ com.usuario.name }} - {{ formatoFecha(com.created_at) }}</b>: {{ com.comentario }}</p>
       <div v-if="com.adjuntos.length > 0" class="mt-2">
@@ -343,7 +445,8 @@ const totalConDetalles = computed(() => {
 
     <div class="mt-4 border-t pt-4">
       <div class="flex flex-col">
-        <textarea v-model="nuevoComentario" placeholder="Escribe un comentario" class="border p-2 w-full"></textarea>
+        <textarea v-model="nuevoComentario" placeholder="Escribe un comentario" class="border p-2 w-full"
+          :disabled="savingComentario"></textarea>
         <input type="file" multiple @change="onFileChange" class="mt-2" />
         <button @click="agregarComentario" :disabled="savingComentario"
           class="w-fit bg-green-500 text-white px-4 py-2 mt-4 rounded-lg flex items-center gap-2">
@@ -380,6 +483,28 @@ const totalConDetalles = computed(() => {
         </li>
       </ul>
 
+    </div>
+  </div>
+
+  <div v-if="mostrarModalComentario" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+      <button @click="cancelarModalComentario"
+        class="absolute top-3 right-3 text-gray-600 hover:text-black text-xl">✕</button>
+      <h3 class="text-lg font-bold mb-4">Comentario requerido</h3>
+      <p class="mb-4">Este cambio de estado requiere que ingreses un comentario. Por favor escribe el comentario antes
+        de
+        continuar.</p>
+      <textarea v-model="nuevoComentario" placeholder="Escribe un comentario"
+        class="w-full border p-2 h-28 mb-4"></textarea>
+      <input type="file" multiple @change="onFileChange" class="mb-4" />
+      <div class="flex justify-end gap-2">
+        <button @click="cancelarModalComentario" class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+        <button @click="enviarComentarioYEstado" :disabled="savingComentario"
+          class="px-4 py-2 bg-blue-600 text-white rounded">
+          <template v-if="!savingComentario">Enviar comentario y cambiar estado</template>
+          <template v-else>Enviando...</template>
+        </button>
+      </div>
     </div>
   </div>
 </template>

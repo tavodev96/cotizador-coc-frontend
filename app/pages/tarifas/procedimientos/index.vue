@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+    middleware: ['sanctum:auth'],
+})
+
 const { items, pagination, search, concepto, loading, fetchTarifas } = useTarifas('procedimientos')
 
 onMounted(() => {

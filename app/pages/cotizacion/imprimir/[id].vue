@@ -4,11 +4,16 @@ definePageMeta({
 });
 
 import { Notivue, Notification, filledIcons } from 'notivue'
+import tippy from 'tippy.js';
+import 'tippy.js/dist/tippy.css';
 
 const route = useRoute()
 const cotizacion = ref(null)
 const contentRef = ref(null)
 const loading = ref(true)
+const loadingDescargar = ref(false)
+const loadingImprimir = ref(false)
+const privateContent = ref(false)
 
 onMounted(async () => {
   try {
@@ -62,6 +67,51 @@ const itemsAgrupados = computed(() => {
   return Array.from(grupos.values());
 });
 
+const detallesAgrupados = computed(() => {
+  if (!cotizacion.value?.detalles) return { insumos: [], lentes: [] };
+
+  const insumos = new Map();
+  const lentes = new Map();
+
+  cotizacion.value.detalles.forEach(detalle => {
+    const tipo = detalle.tipo === 'L' ? lentes : insumos;
+
+    if (!tipo.has(detalle.codigo)) {
+      tipo.set(detalle.codigo, {
+        ...detalle,
+        valor: Number(detalle.valor || 0),
+        cantidad: 1
+      });
+    } else {
+      const item = tipo.get(detalle.codigo);
+      item.valor += Number(detalle.valor || 0);
+      item.cantidad += 1;
+    }
+  });
+
+  return {
+    insumos: Array.from(insumos.values()),
+    lentes: Array.from(lentes.values())
+  };
+});
+
+// Totales
+const totalInsumos = computed(() => {
+  return detallesAgrupados.value.insumos.reduce((sum, item) => sum + item.valor, 0);
+});
+
+const totalLentes = computed(() => {
+  return detallesAgrupados.value.lentes.reduce((sum, item) => sum + item.valor, 0);
+});
+
+const totalCantidadInsumos = computed(() => {
+  return detallesAgrupados.value.insumos.reduce((sum, item) => sum + item.cantidad, 0);
+});
+
+const totalCantidadLentes = computed(() => {
+  return detallesAgrupados.value.lentes.reduce((sum, item) => sum + item.cantidad, 0);
+});
+
 // Formato moneda
 const formatMoney = (num) => {
   return new Intl.NumberFormat('es-CO', {
@@ -71,12 +121,78 @@ const formatMoney = (num) => {
   }).format(num || 0)
 }
 
-const imprimir = () => {
-  window.print()
+const togglePrivate = () => {
+  privateContent.value = !privateContent.value
 }
+
+const imprimirPDF = async () => {
+  if (process.client) {
+    loadingImprimir.value = true;
+
+    const html2pdf = (await import('html2pdf.js')).default;
+
+    if (contentRef.value && cotizacion.value) {
+      const options = {
+        margin: [0, 0, 0, 0],
+        image: { type: 'png', quality: 1.0 },
+        html2canvas: { scale: 4, logging: false, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+
+      html2pdf()
+        .set(options)
+        .from(contentRef.value)
+        .toPdf()
+        .get('pdf')
+        .then(pdf => {
+          const pageCount = pdf.internal.getNumberOfPages();
+
+          // === FOOTER PÁGINAS ===
+          for (let i = 1; i <= pageCount; i++) {
+            pdf.setPage(i);
+
+            const y = pdf.internal.pageSize.height - 15;
+            const x = 10;
+            const pageWidth = pdf.internal.pageSize.width;
+            const rightMargin = 10;
+
+            pdf.setFontSize(8);
+            pdf.setLineWidth(0.2);
+            pdf.line(x, y - 5, pageWidth - rightMargin, y - 5);
+
+            pdf.text('Sede principal Cra 47 # 8c-94 | PBX: (602) 511 02 00', x, y);
+            pdf.text('Cali - Colombia', x, y + 3);
+
+            pdf.text(`Página ${i} de ${pageCount}`, pageWidth - rightMargin, y + 3, { align: 'right' });
+          }
+
+          // Convertir a blob y abrir ventana de impresión
+          const pdfBlob = pdf.output('blob');
+          const url = URL.createObjectURL(pdfBlob);
+
+          const printWindow = window.open(url);
+          if (printWindow) {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          }
+        })
+        .finally(() => {
+          loadingImprimir.value = false;
+        });
+
+    } else {
+      console.error("No se encontró el contenido o la cotización.");
+      loadingImprimir.value = false;
+    }
+  }
+};
 
 const descargarPDF = async () => {
   if (process.client) {
+
+    loadingDescargar.value = true;
     // Importación dinámica (Client-Only)
     const html2pdf = (await import('html2pdf.js')).default;
 
@@ -129,6 +245,7 @@ const descargarPDF = async () => {
     } else {
       console.error("No se encontró la referencia al contenido o los datos de la cotización.");
     }
+    loadingDescargar.value = false;
   }
 }
 </script>
@@ -166,9 +283,10 @@ const descargarPDF = async () => {
           <p>Santiago de Cali,</p>
         </div>
         <div class="text-right">
-          <p><strong>Cotización N°:</strong> {{ cotizacion?.codigo }}</p>
-          <p><strong>Entidad:</strong> {{ cotizacion?.paciente?.entidad?.nombre }}</p>
+          <p><strong>{{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} N°:</strong> {{
+            cotizacion?.codigo }}</p>
           <p><strong>Médico:</strong> {{ cotizacion?.medico?.nombre }}</p>
+          <p><strong>Entidad:</strong> <span class="text-[12px]">{{ cotizacion?.entidad?.nombre }}</span> </p>
         </div>
       </div>
       <hr class="mb-2" />
@@ -197,7 +315,13 @@ const descargarPDF = async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in itemsAgrupados" :key="item.id">
+          <tr v-if="privateContent" v-for="item in itemsAgrupados" :key="item.id">
+            <td class="border px-2 py-2">{{ item.codigo }}</td>
+            <td class="border px-2 py-2">{{ item.nombre }}</td>
+            <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+            <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
+          </tr>
+          <tr v-if="!privateContent" v-for="item in cotizacion?.items" :key="item.id">
             <td class="border px-2 py-2">{{ item.codigo }}</td>
             <td class="border px-2 py-2">{{ item.nombre }}</td>
             <td class="border px-2 py-2">{{ item.lateralidad }}</td>
@@ -205,27 +329,73 @@ const descargarPDF = async () => {
           </tr>
         </tbody>
       </table>
+      <div v-if="privateContent">
+        <!-- Insumos -->
+        <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+          <thead class="bg-[#172983] text-white">
+            <tr>
+              <th class="border px-2 py-2">Descripción</th>
+              <th class="border px-2 py-2 text-center">Cantidad Total</th>
+              <th class="border px-2 py-2 text-right">Valor Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
+              <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
+              <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                {{ formatMoney(totalInsumos) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Lentes -->
+        <h2 class="text-base font-bold mb-2">LENTES</h2>
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+          <thead class="bg-[#172983] text-white">
+            <tr>
+              <th class="border px-2 py-2">Descripción</th>
+              <th class="border px-2 py-2 text-center">Cantidad Total</th>
+              <th class="border px-2 py-2 text-right">Valor Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
+              <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
+              <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                {{ formatMoney(totalLentes) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- Insumos -->
-      <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-      <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-        <thead class="bg-[#172983] text-white">
-          <th class="border px-2 py-2">Código</th>
-          <th class="border px-2 py-2">Nombre</th>
-          <th class="border px-2 py-2">Tipo</th>
-          <th class="border px-2 py-2 text-right">Valor</th>
-        </thead>
-        <tr v-for="detalle in cotizacion?.detalles" :key="detalle.id">
-          <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-          <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-          <td class="border border-gray-400 px-2 py-2">
-            <span v-if="detalle.tipo === 'L'">(Lente)</span>
-            <span v-else-if="detalle.tipo === 'I'">(Insumo)</span>
-          </td>
-          <td class="border border-gray-400 px-2 py-2 text-right">
-            {{ formatMoney(detalle.valor) }}
-          </td>
-        </tr>
-      </table>
+      <div v-if="!privateContent">
+        <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+          <thead class="bg-[#172983] text-white">
+            <th class="border px-2 py-2">Código</th>
+            <th class="border px-2 py-2">Nombre</th>
+            <th class="border px-2 py-2">Tipo</th>
+            <th class="border px-2 py-2 text-right">Valor</th>
+          </thead>
+          <tr v-for="detalle in cotizacion?.detalles" :key="detalle.id">
+            <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
+            <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
+            <td class="border border-gray-400 px-2 py-2">
+              <span v-if="detalle.tipo === 'L'">(Lente)</span>
+              <span v-else-if="detalle.tipo === 'I'">(Insumo)</span>
+            </td>
+            <td class="border border-gray-400 px-2 py-2 text-right">
+              {{ formatMoney(detalle.valor) }}
+            </td>
+          </tr>
+        </table>
+      </div>
       <p class="text-right font-bold mb-4">
         VALOR TOTAL DEL PROCEDIMIENTO: {{ formatMoney(cotizacion?.total) }}
       </p>
@@ -244,9 +414,7 @@ const descargarPDF = async () => {
       <!-- Observaciones -->
       <div class="mb-4">
         <h2 class="text-lg font-bold">Observaciones</h2>
-        <p class="text-sm">{{ cotizacion?.observaciones || 'Ninguna' }} OD. LENTE EYHANCE TORICO INCLUYE VISCOLASTICO
-          DUOVISC IQ. ORDENES POR APARTE POR HONORARIOS MEDICOS. DERECHOS CLINICOS. HA. ENTIDAD CUBRE LENTE HASTA POR UN
-          VALOR DE $700,000 VALOR YA DESCONTADO EN VALOR DE LIO. EXCEDENTE SERA A CARGO DE PACIENTE.</p>
+        <p class="text-sm">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
       </div>
 
       <!-- Inclusiones -->
@@ -255,30 +423,68 @@ const descargarPDF = async () => {
       <p>{{ cotizacion?.inclusiones || 'Ninguna' }}</p>
     </div> -->
       <!-- Pie de página -->
-      <div class="mt-20 text-sm text-gray-700">
+      <div class="flex flex-row items-center mt-20 text-sm text-gray-700">
         <p class="mb-1 font-semibold text-xl">{{ cotizacion?.asesor?.name }}</p>
-        <p>Asesor barra SAI</p>
-        <p>Email: {{ cotizacion?.asesor?.email }}</p>
-
-        <!-- <hr class="my-4" /> -->
-
-        <!-- <div class="flex justify-between">
-        <p>Sede principal Cra 47 # 8c-94<br />PBX: (602) 511 02 00</p>
-        <p>Cali - Colombia</p>
-      </div> -->
+        <p>, Asesor barra SAI</p>
+        <p>, Email: {{ cotizacion?.asesor?.email }}</p>
       </div>
     </div>
 
+    <div class="py-6 px-6 bg-white text-black max-w-5xl mx-auto">
+      <div class="inline-flex items-center">
+        <label class="relative flex cursor-pointer items-center rounded-full p-3" for="login" data-ripple-dark="true">
+          <input id="login" type="checkbox"
+            class="before:content[''] peer relative h-5 w-5 cursor-pointer appearance-none rounded-md border border-blue-400 transition-all before:absolute before:top-2/4 before:left-2/4 before:block before:h-12 before:w-12 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-blue-gray-500 before:opacity-0 before:transition-opacity checked:border-blue-500 checked:bg-blue-500 checked:before:bg-blue-500 hover:before:opacity-10"
+            v-model="private" @change="togglePrivate" />
+          <div
+            class="pointer-events-none absolute top-2/4 left-2/4 -translate-y-2/4 -translate-x-2/4 text-white opacity-0 transition-opacity peer-checked:opacity-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"
+              stroke="currentColor" stroke-width="1">
+              <path fill-rule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clip-rule="evenodd"></path>
+            </svg>
+          </div>
+        </label>
+        <label class="mt-px cursor-pointer select-none font-light text-gray-700" for="login">
+          Imprimir información de la <span class="font-bold ">{{ cotizacion?.tipo_gestion == 'cotización' ? 'cotización'
+            : 'codificación' }} </span> para el paciente
+        </label>
+      </div>
+    </div>
     <!-- Botón imprimir -->
     <div class="mt-6 text-center print:hidden flex justify-center gap-4">
-      <button class="bg-blue-600 text-white px-4 py-2 rounded" @click="imprimir">
-        Imprimir
+      <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded" @click="imprimirPDF" :disabled="loadingImprimir">
+        <span v-if="loadingImprimir">Imprimiendo...</span>
+        <span v-else>🖨 Imprimir</span>
       </button>
-      <button class="bg-green-600 text-white px-4 py-2 rounded" @click="imprimir">
+      <button class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded"
+        v-tippy="{ content: 'Muy pronto, estamos en construcción' }">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+          viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
+          <path fill="currentColor"
+            d="M12 22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12v1.45q0 1.475-1.012 2.513T18.5 17q-.875 0-1.65-.375t-1.3-1.075q-.725.725-1.638 1.088T12 17q-2.075 0-3.537-1.463T7 12t1.463-3.537T12 7t3.538 1.463T17 12v1.45q0 .65.425 1.1T18.5 15t1.075-.45t.425-1.1V12q0-3.35-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20h4q.425 0 .713.288T17 21t-.288.713T16 22zm0-7q1.25 0 2.125-.875T15 12t-.875-2.125T12 9t-2.125.875T9 12t.875 2.125T12 15" />
+        </svg>
         Correo electrónico
       </button>
-      <button class="bg-red-600 text-white px-4 py-2 rounded" @click="descargarPDF">
-        Descargar PDF
+      <button class="flex justify-center items-center gap-2 bg-red-600 text-white mt-4 px-4 py-2 rounded"
+        @click="descargarPDF" :disabled="loadingDescargar">
+        <template v-if="!loadingDescargar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+            viewBox="0 0 24 24"><!-- Icon from Material Design Icons by Pictogrammers - https://github.com/Templarian/MaterialDesign/blob/master/LICENSE -->
+            <path
+              d="M14 2l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8m4 18V9h-5V4H6v16h12m-7.08-7.69c-.24-.77-.77-3.23.63-3.27c1.4-.04.48 3.12.48 3.12c.39 1.49 2.02 2.56 2.02 2.56c.5-.15 3.35-.48 2.95 1c-.43 1.48-3.5.09-3.5.09c-1.95.14-3.41.66-3.41.66c-1.13 2.11-2.45 3.03-2.99 2.14c-.67-1.11 2.13-2.54 2.13-2.54c1.45-2.35 1.67-3.72 1.69-3.76m.65.84c-.4 1.3-1.2 2.69-1.2 2.69c.85-.34 2.71-.73 2.71-.73c-1.14-1-1.49-1.95-1.51-1.96m3.14 2.17s1.75.65 1.79.39c.07-.27-1.33-.51-1.79-.39m-5.66 1.49c-.77.3-1.51 1.58-1.33 1.58c.18.01.91-.6 1.33-1.58m2.52-5.55c0-.05.43-1.68 0-1.73c-.3-.03-.01 1.69 0 1.73z"
+              fill="currentColor" />
+          </svg>
+          Descargar PDF
+        </template>
+        <template v-else>
+          <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Generando PDF...
+        </template>
       </button>
     </div>
   </div>

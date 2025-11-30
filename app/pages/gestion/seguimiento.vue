@@ -38,8 +38,10 @@ const borrarFiltros = () => {
     <div v-for="c in cotizaciones" :key="c.id" class="border p-4 mb-2">
       <p><b>{{ c.codigo }}</b> - {{ formatoFecha(c.created_at) }}</p>
       <p>Paciente: {{ c.paciente.nombre_completo }}- Identificación: {{ c.paciente.numero_identificacion }}</p>
-      <p class="bg-blue-900 w-fit text-white py-1 px-2 rounded-full uppercase text-xs font-bold">{{ c.estado.nombre }}
-      </p>
+      <div class="flex items-center gap-2">
+        <p class="bg-blue-900 w-fit text-white py-1 px-2 rounded-full uppercase text-xs font-bold">{{ c.estado.nombre }}</p>
+        <p class="bg-green-900 w-fit text-white py-1 px-2 rounded-full uppercase text-xs font-bold">{{ c.tipo_gestion }}</p>
+      </div>
       <NuxtLink :to="`/cotizacion/${c.id}`" class="text-blue-500">Ver detalle</NuxtLink>
     </div>
 

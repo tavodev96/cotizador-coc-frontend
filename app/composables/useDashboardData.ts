@@ -4,37 +4,26 @@ export const useDashboardData = () => {
     
     const fetchTotalOrdenamientos = async () => {
         try {
-            // Aquí simulas la llamada a tu API
-            // const response = await $fetch('/api/ordenamientos/total'); 
-            // totalOrdenamientos.value = response.total;
+            const { data } =  await useSanctumFetch('/api/ordenamientos/cantidad',{method: 'GET'});
 
-            // ***** SIMULACIÓN DE DATOS DINÁMICOS *****
-            await new Promise(resolve => setTimeout(resolve, 500)); // Simula un retraso de red
-            const dataObtenida = 123; // ¡Valor dinámico obtenido de la API!
-            totalOrdenamientos.value = dataObtenida;
-            // ****************************************
+            totalOrdenamientos.value = data.value.cantidad_ordenamientos;
 
         } catch (error) {
             console.error("Error al obtener total de ordenamientos:", error);
-            totalOrdenamientos.value = 0; // Manejo de error
+            totalOrdenamientos.value = 0;
         }
     };
 
     const fetchTotalCotizaciones = async () => {
         try {
-            // Aquí simulas la llamada a tu API
-            // const response = await $fetch('/api/ordenamientos/total'); 
-            // totalOrdenamientos.value = response.total;
 
-            // ***** SIMULACIÓN DE DATOS DINÁMICOS *****
-            await new Promise(resolve => setTimeout(resolve, 500)); // Simula un retraso de red
-            const dataObtenida = 40; // ¡Valor dinámico obtenido de la API!
-            totalCotizaciones.value = dataObtenida;
-            // ****************************************
+            const { data } =  await useSanctumFetch('/api/cotizaciones/cantidad',{method: 'GET'});
+
+            totalCotizaciones.value = data.value.cantidad;
 
         } catch (error) {
             console.error("Error al obtener total de Cotizaciones:", error);
-            totalCotizaciones.value = 0; // Manejo de error
+            totalCotizaciones.value = 0;
         }
     };
 
@@ -43,7 +32,6 @@ export const useDashboardData = () => {
         fetchTotalCotizaciones();
     });
 
-    // Devuelve los valores reactivos y las funciones que necesites
     return {
         totalOrdenamientos,
         totalCotizaciones,
