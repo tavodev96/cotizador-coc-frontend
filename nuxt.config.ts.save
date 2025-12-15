@@ -22,7 +22,7 @@ export default defineNuxtConfig({
     'notivue/animations.css'
   ],
   sanctum: {
-    baseUrl: 'https://api.cotizador.clinicaofta.com', // Laravel API
+    baseUrl: 'http://localhost:8000', // Laravel API
     mode: 'cookie',
     endpoints: {
       login: '/login',
@@ -41,9 +41,9 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      frontendUrl: 'https://cotizador.clinicaofta.com',
-      apiBase: 'https://api.cotizador.clinicaofta.com/api',
-      ImageUrl: 'https://cotizador.clinicaofta.com',
+      frontendUrl: 'http://localhost:3000',
+      apiBase: 'http://localhost:8000/api',
+      ImageUrl: 'http://localhost:3000',
     }
   },
 })

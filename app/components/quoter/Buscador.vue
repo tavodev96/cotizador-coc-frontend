@@ -21,7 +21,7 @@ const loading = ref(false)
 const buscar = async () => {
     loading.value = true
     try {
-        const res  = await $fetch('http://localhost:8000/api/cotizaciones', {
+        const res  = await $fetch('https://api.cotizador.clinicaofta.com/api/cotizaciones', {
             method: 'GET',
             params: {
                 codigo: filtros.value.codigo,
