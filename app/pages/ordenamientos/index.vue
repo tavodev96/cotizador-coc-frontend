@@ -7,6 +7,7 @@ definePageMeta({
 
 const config = useRuntimeConfig()
 const router = useRouter();
+const entidad = ref('')
 const search = ref('')
 const fechaInicio = ref('')
 const fechaFin = ref('')
@@ -26,13 +27,14 @@ const fetchData = async () => {
             method: 'GET',
             credentials: "include",
             params: {
+                entidad: entidad.value,
                 fecha_inicio: fechaInicio.value,
                 fecha_fin: fechaFin.value,
                 numero_historia: search.value
             }
         })
-
-        data.value = Array.isArray(response) ? response : (response || [])
+		console.log(response); 
+        data.value = Array.isArray(response.items) ? response.items : (response || [])
         page.value = 1
     } catch (error) {
         console.error('Error cargando datos:', error)
@@ -46,20 +48,21 @@ const generarCotizacion = (item) => {
         name: 'gestion-cotizacion', // Nombre de la ruta de tu formulario
         query: {
             tipo_identificacion: 'CC', // si la tienes
-            numero_identificacion: item.pacide,
-            nombres: item.pacnom,
-            apellidos: item.pacape,
-            entidad_cod: item.empcod,
-            entidad: item.empnom,
+            numero_identificacion: item.documento,
+            entidad_cod: item.entidad_cod,
+            entidad: item.entidad_nom,
             medico: item.medico,
-            medico_id: item.ideide,
-            consultorio: item.n_consultorio,
-            procedimiento: item.actnom,
+            medico_id: item.id_medico,
+            consultorio: item.consultorio,
+            procedimiento: item.procedimiento,
             id_ordenamiento: item.id_ordenamiento,
-            codigo: item.actcfa
+            codigo: item.CUP
         }
     });
 };
+
+// nombres: item.pacnom,
+// apellidos: item.pacape,
 
 const totalPages = computed(() => Math.ceil(data.value.length / perPage))
 
@@ -75,6 +78,7 @@ const prevPage = () => {
 }
 
 const clearFilters = () => {
+    entidad.value = ''
     search.value = ''
     fechaInicio.value = ''
     fechaFin.value = ''
@@ -95,7 +99,8 @@ const pushNotification = (type, message, title) => {
             <Notification :item="item" :icons="filledIcons" />
         </Notivue>
         <div class="mb-4 flex gap-2">
-            <input v-model="search" placeholder="N° identificación paciente" class="border px-2 py-1" />
+            <input type="text" class="border px-2 py-1" placeholder="Nit Entidad" v-model="entidad" />
+            <input v-model="search" placeholder="N° de historia" class="border px-2 py-1" />
             <input type="date" v-model="fechaInicio" class="border px-2 py-1" />
             <input type="date" v-model="fechaFin" class="border px-2 py-1" />
             <button @click="fetchData" class="bg-blue-500 text-white px-4 py-1 rounded">
@@ -123,12 +128,12 @@ const pushNotification = (type, message, title) => {
             </thead>
             <tbody>
                 <tr v-for="item in paginatedData" :key="item.id">
-                    <td class="border px-2 py-1">{{ item.pacide }}</td>
+                    <td class="border px-2 py-1">{{ item.documento }}</td>
                     <td class="border px-2 py-1">{{ item.id_ordenamiento }}</td>
                     <td class="border px-2 py-1">{{ item.empnom }}</td>
-                    <td class="border px-2 py-1">{{ item.f_ordenamiento }}</td>
-                    <td class="border px-2 py-1">{{ item.actnom }}</td>
-                    <td class="border px-2 py-1">{{ item.n_consultorio }}</td>
+                    <td class="border px-2 py-1">{{ item.fecha }}</td>
+                    <td class="border px-2 py-1">{{ item.procedimiento }}</td>
+                    <td class="border px-2 py-1">{{ item.consultorio }}</td>
                     <td class="border px-2 py-1">{{ item.medico }}</td>
                     <td class="border px-2 py-1">
                         <button @click="generarCotizacion(item)" class="text-blue-500">

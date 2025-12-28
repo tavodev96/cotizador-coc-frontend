@@ -6,7 +6,7 @@
       </div>
       <div class="flex items-center text-gray-500">
         <div class="bg-center bg-cover bg-no-repeat rounded-full inline-block h-12 w-12 ml-2"
-          style="background-image: url(https://i.pinimg.com/564x/de/0f/3d/de0f3d06d2c6dbf29a888cf78e4c0323.jpg)">
+          style="background-image: url(/img/user.png)">
         </div>
       </div>
     </div>

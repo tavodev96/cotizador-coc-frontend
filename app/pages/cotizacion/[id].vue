@@ -25,12 +25,12 @@ const estadoSeleccionadoTemp = ref(null)
 const fetchDetalle = async () => {
   try {
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}`)
-    
+
     if (error.value) {
       console.error('Error en fetchDetalle:', error.value)
       return
     }
-        
+
     // Asignar los datos con un pequeño delay para asegurar reactividad
     cotizacion.value = { ...data.value.cotizacion }
     historico_estados.value = [...data.value.estados]
@@ -130,11 +130,11 @@ const realizarCambioEstado = async (estadoId) => {
 
     // Pequeño delay antes de refrescar
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     await router.replace({ path: route.path, query: { _t: Date.now() } })
-    
+
     // return true
-  
+
   } catch (e) {
     console.error('Error en realizarCambioEstado:', e)
     pushNotification('error', 'No se pudo cambiar el estado', 'Error')
@@ -436,7 +436,7 @@ const totalConDetalles = computed(() => {
               <path fill="#07459C"
                 d="M18 15.75q0 2.6-1.825 4.425T11.75 22t-4.425-1.825T5.5 15.75V6.5q0-1.875 1.313-3.187T10 2t3.188 1.313T14.5 6.5v8.75q0 1.15-.8 1.95t-1.95.8t-1.95-.8t-.8-1.95V6h2v9.25q0 .325.213.538t.537.212t.538-.213t.212-.537V6.5q-.025-1.05-.737-1.775T10 4t-1.775.725T7.5 6.5v9.25q-.025 1.775 1.225 3.013T11.75 20q1.75 0 2.975-1.237T16 15.75V6h2z" />
             </svg>
-            <a :href="`https://api.cotizador.clinicaofta.com/storage/${adjunto.archivo_path}`" target="_blank">{{ adjunto.archivo_nombre
+            <a :href="`http://127.0.0.1:8000/storage/${adjunto.archivo_path}`" target="_blank">{{ adjunto.archivo_nombre
             }}</a>
           </li>
         </ul>
