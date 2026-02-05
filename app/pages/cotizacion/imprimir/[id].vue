@@ -112,6 +112,41 @@ const totalCantidadLentes = computed(() => {
   return detallesAgrupados.value.lentes.reduce((sum, item) => sum + item.cantidad, 0);
 });
 
+// Agrupar procedimientos por concepto y calcular totales
+const agrupadoPorConcepto = computed(() => {
+  if (!cotizacion.value?.items) return [];
+
+  const map = new Map();
+
+  cotizacion.value.items.forEach(item => {
+    const key = item.concepto ?? 'SIN_CONCEPTO';
+    const connom = item.connom ?? '';
+    const cantidad = Number(item.cantidad ?? 1);
+    const valor = Number(item.valor || 0) * cantidad;
+
+    if (!map.has(key)) {
+      map.set(key, { concepto: key, connom: connom, total: valor, cantidad: cantidad });
+    } else {
+      const g = map.get(key);
+      g.total += valor;
+      g.cantidad += cantidad;
+      map.set(key, g);
+    }
+  });
+
+  return Array.from(map.values());
+});
+
+const getConceptoLabel = (concepto, connom) => {
+  const c = concepto ?? '';
+  const name = (connom || '').trim();
+
+  if (c === 'DP' || /DERECHOS/i.test(name)) return 'DP - Derechos Clínicos';
+  if (c === 'HANQ' || /ANEST/i.test(name)) return 'HANQ - Honorarios Anestesiologo';
+  if (!c || c === 'SIN_CONCEPTO') return 'HM - Honorarios Médicos';
+  return `${c} - ${name || 'Sin nombre'}`;
+};
+
 // Formato moneda
 const formatMoney = (num) => {
   return new Intl.NumberFormat('es-CO', {
@@ -304,6 +339,7 @@ const descargarPDF = async () => {
       </div>
       <hr class="mb-4" />
       <!-- Procedimientos -->
+      <!-- HANQ, DP, null -->
       <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
       <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
         <thead class="bg-[#172983] text-white">
@@ -329,72 +365,118 @@ const descargarPDF = async () => {
           </tr>
         </tbody>
       </table>
-      <div v-if="privateContent">
-        <!-- Insumos -->
-        <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-          <thead class="bg-[#172983] text-white">
-            <tr>
-              <th class="border px-2 py-2">Descripción</th>
-              <th class="border px-2 py-2 text-center">Cantidad Total</th>
-              <th class="border px-2 py-2 text-right">Valor Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
-              <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
-              <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
-                {{ formatMoney(totalInsumos) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
 
-        <!-- Lentes -->
-        <h2 class="text-base font-bold mb-2">LENTES</h2>
+      <!-- Agrupado por concepto -->
+      <div v-if="!privateContent">
+        <h2 class="text-base font-bold mb-2">AGRUPADO POR CONCEPTO</h2>
         <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
           <thead class="bg-[#172983] text-white">
             <tr>
-              <th class="border px-2 py-2">Descripción</th>
-              <th class="border px-2 py-2 text-center">Cantidad Total</th>
+              <th class="border px-2 py-2">Concepto</th>
               <th class="border px-2 py-2 text-right">Valor Total</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
-              <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
-              <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
-                {{ formatMoney(totalLentes) }}
-              </td>
+            <tr v-for="c in agrupadoPorConcepto" :key="c.concepto">
+              <td class="border px-2 py-2">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
+              <td class="border px-2 py-2 text-right">{{ formatMoney(c.total) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <div v-if="privateContent && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+        <!-- Insumos (agregados) -->
+        <template v-if="detallesAgrupados.insumos.length > 0">
+          <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+            <thead class="bg-[#172983] text-white">
+              <tr>
+                <th class="border px-2 py-2">Descripción</th>
+                <th class="border px-2 py-2 text-center">Cantidad Total</th>
+                <th class="border px-2 py-2 text-right">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
+                <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
+                <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                  {{ formatMoney(totalInsumos) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <!-- Lentes (agregados) -->
+        <template v-if="detallesAgrupados.lentes.length > 0">
+          <h2 class="text-base font-bold mb-2">LENTES</h2>
+          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+            <thead class="bg-[#172983] text-white">
+              <tr>
+                <th class="border px-2 py-2">Descripción</th>
+                <th class="border px-2 py-2 text-center">Cantidad Total</th>
+                <th class="border px-2 py-2 text-right">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
+                <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
+                <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                  {{ formatMoney(totalLentes) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </div>
 
       <!-- Insumos -->
-      <div v-if="!privateContent">
-        <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-          <thead class="bg-[#172983] text-white">
-            <th class="border px-2 py-2">Código</th>
-            <th class="border px-2 py-2">Nombre</th>
-            <th class="border px-2 py-2">Tipo</th>
-            <th class="border px-2 py-2 text-right">Valor</th>
-          </thead>
-          <tr v-for="detalle in cotizacion?.detalles" :key="detalle.id">
-            <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-            <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-            <td class="border border-gray-400 px-2 py-2">
-              <span v-if="detalle.tipo === 'L'">(Lente)</span>
-              <span v-else-if="detalle.tipo === 'I'">(Insumo)</span>
-            </td>
-            <td class="border border-gray-400 px-2 py-2 text-right">
-              {{ formatMoney(detalle.valor) }}
-            </td>
-          </tr>
-        </table>
+      <div v-if="!privateContent && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+        <template v-if="detallesAgrupados.insumos.length > 0">
+          <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+            <thead class="bg-[#172983] text-white">
+              <tr>
+                <th class="border px-2 py-2">Código</th>
+                <th class="border px-2 py-2">Nombre</th>
+                <th class="border px-2 py-2">Tipo</th>
+                <th class="border px-2 py-2 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="detalle in detallesAgrupados.insumos" :key="detalle.id">
+                <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
+                <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
+                <td class="border border-gray-400 px-2 py-2">(Insumo)</td>
+                <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <template v-if="detallesAgrupados.lentes.length > 0">
+          <h2 class="text-base font-bold mb-2">LENTES</h2>
+          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+            <thead class="bg-[#172983] text-white">
+              <tr>
+                <th class="border px-2 py-2">Código</th>
+                <th class="border px-2 py-2">Nombre</th>
+                <th class="border px-2 py-2">Tipo</th>
+                <th class="border px-2 py-2 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="detalle in detallesAgrupados.lentes" :key="detalle.id">
+                <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
+                <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
+                <td class="border border-gray-400 px-2 py-2">(Lente)</td>
+                <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
       </div>
       <p class="text-right font-bold mb-4">
         VALOR TOTAL DEL PROCEDIMIENTO: {{ formatMoney(cotizacion?.total) }}
@@ -423,10 +505,10 @@ const descargarPDF = async () => {
       <p>{{ cotizacion?.inclusiones || 'Ninguna' }}</p>
     </div> -->
       <!-- Pie de página -->
-      <div class="flex flex-row items-center mt-20 text-sm text-gray-700">
+      <div class="flex flex-col items-start leading-none mt-20 text-sm text-gray-700">
         <p class="mb-1 font-semibold text-xl">{{ cotizacion?.asesor?.name }}</p>
-        <p>, Asesor barra SAI</p>
-        <p>, Email: {{ cotizacion?.asesor?.email }}</p>
+        <p>Asesor barra SAI</p>
+        <p>Email: {{ cotizacion?.asesor?.email }}</p>
       </div>
     </div>
 

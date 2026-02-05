@@ -171,7 +171,8 @@
                         </select>
 
                         <input v-show="!isCodificacion" :value="formatearNumero(item.valor_con_descuento ?? item.valor)"
-                            placeholder="Valor" class="p-2 border rounded col-span-2" type="text" disabled />
+                            placeholder="Valor" class="p-2 border rounded col-span-2" type="text"
+                            @input="onItemValorInput($event.target.value, index)" />
 
 
                         <input v-show="!isCodificacion" v-model.number="item.descuento" placeholder="% Desc"
@@ -204,7 +205,8 @@
                         <!-- Valor unitario -->
                         <input v-show="!isCodificacion" v-model.number="insumo.valor" type="hidden" />
                         <input v-show="!isCodificacion" :value="formatearNumero(insumo.valor)" type="text"
-                            class="p-2 border rounded col-span-2" disabled placeholder="Valor" />
+                            class="p-2 border rounded col-span-2" placeholder="Valor"
+                            @input="onInsumoValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
                         <input v-show="!isCodificacion" v-model.number="insumo.cantidad" placeholder="Cantidad"
@@ -212,10 +214,7 @@
 
                         <!-- Subtotal calculado -->
                         <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
-                            {{ (insumo.cantidad * insumo.valor).toLocaleString('es-CO', {
-                                style: 'currency', currency:
-                                    'COP'
-                            }) }}
+                            {{ formatCurrency(insumo.cantidad * insumo.valor) }}
                         </span>
 
                         <button @click="eliminarInsumo(index)"
@@ -245,7 +244,8 @@
                         <!-- Valor unitario -->
                         <input v-model.number="lente.valor" type="hidden" />
                         <input v-show="!isCodificacion" :value="formatearNumero(lente.valor)" type="text"
-                            class="p-2 border rounded col-span-2" disabled placeholder="Valor" />
+                            class="p-2 border rounded col-span-2" placeholder="Valor"
+                            @input="onLenteValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
                         <input v-show="!isCodificacion" v-model.number="lente.cantidad" placeholder="Cantidad"
@@ -253,10 +253,7 @@
 
                         <!-- Subtotal calculado -->
                         <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
-                            {{ (lente.cantidad * lente.valor).toLocaleString('es-CO', {
-                                style: 'currency',
-                                currency: 'COP'
-                            }) }}
+                                {{ formatCurrency(lente.cantidad * lente.valor) }}
                         </span>
 
                         <!-- Botón eliminar -->
@@ -282,11 +279,7 @@
                     :lentes="totalLentes" />
 
                 <div class="mt-4 text-right text-xl font-bold">
-                    <!-- Valor Total cotización: {{ total.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }) }} -->
-                    Valor total cotización:{{ totalCotizacion.toLocaleString('es-CO', {
-                        style: 'currency', currency:
-                            'COP'
-                    }) }}
+                    Valor total cotización: {{ formatCurrency(totalCotizacion) }}
                 </div>
 
                 <label class="font-semibold mt-4 block">Observaciones</label>
@@ -437,6 +430,7 @@ definePageMeta({
 
 import { Notivue, Notification, filledIcons } from 'notivue'
 const route = useRoute();
+const router = useRouter();
 
 const paciente = ref({
     id: null,
@@ -750,13 +744,19 @@ const confirmarCodigo = () => {
 
 const formatearNumero = (valor) => {
     const numero = Number(valor);
-    if (isNaN(numero)) return '0,00';
+    if (isNaN(numero)) return '0';
 
+    // Mostrar sin decimales y sin coma decimal cuando el valor es entero
     return new Intl.NumberFormat('es-CO', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
     }).format(numero);
-};
+}
+
+const formatCurrency = (valor) => {
+    const numero = Number(valor) || 0;
+    return numero.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+}
 
 // Marcar/desmarcar paquete completo
 const seleccionarPaquete = (event, grupo) => {
@@ -786,6 +786,38 @@ const calcularTotal = (index) => {
     const item = cotizacion.value.items[index];
     item.valor_con_descuento = item.valor - (item.valor * (item.descuento / 100));
     cotizacion.value.items[index] = { ...item };
+}
+
+const parseNumero = (str) => {
+    if (typeof str === 'number') return str;
+    if (!str) return 0;
+    // eliminar símbolos, espacios y formateo colombiano (puntos miles, coma decimales)
+    const cleaned = String(str).replace(/\./g, '').replace(/,/g, '.').replace(/[^0-9.\-]/g, '');
+    const n = Number(cleaned);
+    return isNaN(n) ? 0 : n;
+}
+
+const onItemValorInput = (val, index) => {
+    const numero = parseNumero(val);
+    const item = cotizacion.value.items[index];
+    if (!item) return;
+    item.valor = numero;
+    // recalcular descuento/valor con descuento
+    calcularTotal(index);
+}
+
+const onInsumoValorInput = (val, index) => {
+    const numero = parseNumero(val);
+    const insumo = cotizacion.value.insumos[index];
+    if (!insumo) return;
+    insumo.valor = numero;
+}
+
+const onLenteValorInput = (val, index) => {
+    const numero = parseNumero(val);
+    const lente = cotizacion.value.lentes[index];
+    if (!lente) return;
+    lente.valor = numero;
 }
 
 const totalProcedimientos = computed(() => {
@@ -965,12 +997,14 @@ const guardarCotizacion = async () => {
             consultorio_id: cotizacion.value.consultorio_id,
             observaciones: cotizacion.value.observaciones,
 
-            // 🔹 Procedimientos
+                // 🔹 Procedimientos
             items: cotizacion.value.items.map(item => ({
                 codigo: item.codigo,
                 nombre: item.nombre,
                 lateralidad: item.lateralidad,
                 valor: Number(item.valor_con_descuento || item.valor),
+                descuento: item.descuento,
+                concepto: item.concepto ?? '',
                 cantidad: item.cantidad ?? 1
             })),
 
@@ -1081,6 +1115,15 @@ const guardarCotizacion = async () => {
         cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', preAnestesia: '', otros: '', fechaVigencia: '' };
 
+        // Redirigir a la vista de impresión con el id devuelto por el backend (espera 3 segundos)
+        const createdId = data.value?.id;
+        if (createdId) {
+            setTimeout(() => {
+                router.push(`/cotizacion/imprimir/${createdId}`);
+            }, 3000);
+        }
+
+        
     } catch (err) {
         console.error('❌ Error inesperado:', err)
     } finally {

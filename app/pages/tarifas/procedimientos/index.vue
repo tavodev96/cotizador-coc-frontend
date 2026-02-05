@@ -23,6 +23,11 @@ const changePage = (page: number) => {
   pagination.value.page = page
   fetchTarifas()
 }
+
+const formatMoney = (v: number | string) => {
+  const n = Number(v) || 0
+  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
 </script>
 
 <template>
@@ -73,7 +78,7 @@ const changePage = (page: number) => {
           <td class="border p-2">{{ item.nombre_tarifa }}</td>
           <td class="border p-2">{{ item.concepto }}</td>
           <td class="border p-2">{{ item.nombre_concepto }}</td>
-          <td class="border p-2">{{ item.valor }}</td>
+          <td class="border p-2">{{ formatMoney(item.valor) }}</td>
         </tr>
         <tr v-if="!loading && (!items || items.length === 0)">
           <td colspan="3" class="text-center p-4">No se encontraron resultados</td>

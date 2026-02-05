@@ -24,6 +24,12 @@ const changePage = (page: number) => {
   pagination.value.page = page
   fetchTarifas()
 }
+
+const formatMoneyPlain = (v: number | string) => {
+  const n = Number(v) || 0
+  // Mostrar separador de miles y sin decimales: 1.646.000
+  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
 </script>
 
 <template>
@@ -75,7 +81,7 @@ const changePage = (page: number) => {
         <tr v-for="item in items" :key="item.id">
           <td class="border p-2">{{ item.codigo }}</td>
           <td class="border p-2">{{ item.nombre }}</td>
-          <td class="border p-2">{{ item.valor }}</td>
+          <td class="border p-2">{{ formatMoneyPlain(item.valor) }}</td>
           <td class="border p-2">{{ item.codigo_tarifa }}</td>
           <td class="border p-2">{{ item.nombre_tarifa }}</td>
         </tr>
