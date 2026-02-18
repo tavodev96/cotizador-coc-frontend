@@ -88,7 +88,7 @@ onMounted(async () => {
         );
         if (status.value == 'success') {
             console.log(data.value.data.value.medicos);
-            
+
             medicos.value = data.value.data.value.medicos
         }
     } catch (e) {
@@ -140,24 +140,21 @@ const pushNotification = (type, message, title) => {
         <Notivue v-slot="item">
             <Notification :item="item" :icons="filledIcons" />
         </Notivue>
-        <div class="mb-4 flex gap-2">
+        <div class="mb-4 flex flex-wrap gap-2">
             <input type="text" class="border px-2 py-1" placeholder="Nit Entidad" v-model="entidad" />
             <input v-model="search" placeholder="N° de identificación" class="border px-2 py-1" />
-            <div class="relative w-64">
-                <input
-                    type="text"
-                    class="border px-2 py-2 w-full"
-                    placeholder="Medico"
-                    v-model="searchMedico"
-                    @input="showSuggestions = true"
-                    @focus="showSuggestions = true"
-                    @blur="hideSuggestions"
-                />
-                <ul v-show="showSuggestions && filteredMedicos.length" class="absolute z-20 bg-white border w-full max-h-48 overflow-auto mt-1 rounded shadow">
-                    <li v-for="m in filteredMedicos" :key="getMedicoId(m)" @mousedown.prevent="selectMedico(m)" class="px-2 py-1 hover:bg-gray-100 cursor-pointer">
-                        {{ getMedicoLabel(m) }}
-                    </li>
-                </ul>
+            <div class="w-full md:w-auto relative">
+                <div class="relative w-full">
+                    <input type="text" class="border px-2 py-2 w-full" placeholder="Medico" v-model="searchMedico"
+                        @input="showSuggestions = true" @focus="showSuggestions = true" @blur="hideSuggestions" />
+                    <ul v-show="showSuggestions && filteredMedicos.length"
+                        class="absolute z-20 bg-white border w-full max-h-48 overflow-auto mt-1 rounded shadow">
+                        <li v-for="m in filteredMedicos" :key="getMedicoId(m)" @mousedown.prevent="selectMedico(m)"
+                            class="px-2 py-1 hover:bg-gray-100 cursor-pointer">
+                            {{ getMedicoLabel(m) }}
+                        </li>
+                    </ul>
+                </div>
             </div>
             <input type="date" v-model="fechaInicio" class="border px-2 py-1" />
             <input type="date" v-model="fechaFin" class="border px-2 py-1" />

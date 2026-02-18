@@ -2,40 +2,11 @@
     <div class="bg-white rounded-xl shadow p-6 max-w-6xl mx-auto">
         <div v-if="extracting" class="max-w-5xl mx-auto p-4 bg-white rounded shadow">
             <div class="flex justify-center items-center gap-2">
-                <svg width="32" height="32" viewBox="0 0 38 38">
-                    <g transform="translate(19 19)">
-                        <g transform="rotate(0)">
-                            <circle cx="0" cy="12" r="3" fill="#3b82f6" opacity="0.125">
-                                <animate attributeName="opacity" from="0.125" to="0.125" dur="1.2s" begin="0s"
-                                    repeatCount="indefinite" keyTimes="0;1" values="1;0.125"></animate>
-                            </circle>
-                        </g>
-                        <g transform="rotate(45)">
-                            <circle cx="0" cy="12" r="3" fill="#3b82f6" opacity="0.25">
-                                <animate attributeName="opacity" from="0.25" to="0.25" dur="1.2s" begin="0.15s"
-                                    repeatCount="indefinite" keyTimes="0;1" values="1;0.25"></animate>
-                            </circle>
-                        </g>
-                        <g transform="rotate(90)">
-                            <circle cx="0" cy="12" r="3" fill="#3b82f6" opacity="0.375">
-                                <animate attributeName="opacity" from="0.375" to="0.375" dur="1.2s" begin="0.3s"
-                                    repeatCount="indefinite" keyTimes="0;1" values="1;0.375"></animate>
-                            </circle>
-                        </g>
-                        <g transform="rotate(135)">
-                            <circle cx="0" cy="12" r="3" fill="#3b82f6" opacity="0.5">
-                                <animate attributeName="opacity" from="0.5" to="0.5" dur="1.2s"
-                                    begin="0.44999999999999996s" repeatCount="indefinite" keyTimes="0;1" values="1;0.5">
-                                </animate>
-                            </circle>
-                        </g>
-                        <g transform="rotate(180)">
-                            <circle cx="0" cy="12" r="3" fill="#3b82f6" opacity="0.625">
-                                <animate attributeName="opacity" from="0.625" to="0.625" dur="1.2s" begin="0.6s"
-                                    repeatCount="indefinite" keyTimes="0;1" values="1;0.625"></animate>
-                            </circle>
-                        </g>
-                    </g>
+                <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                    aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+                        fill="none"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
                 <span class="text-gray-600">Extrayendo información...</span>
             </div>
@@ -141,8 +112,14 @@
 
                 <div class="md:col-span-2 mt-4">
                     <div class="flex items-center gap-2 mb-2">
-                        <h3 class="text-lg font-bold">Procedimientos</h3>
-                        <div v-if="loadingBuscarCodigo" class="w-fit flex justify-center items-center gap-2 bg-blue-600 text-white px-2 py-1 rounded">
+                        <input type="checkbox" id="cotizar-laser" v-model="cotizandoLaser" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
+                        <label for="cotizar-laser" class="text-sm font-medium text-gray-700">Vas a cotizar laser</label>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        
+                        <h3 class="text-lg font-bold">{{ cotizandoLaser ? 'Laser' : 'Procedimientos' }}</h3>
+                        <div v-if="loadingBuscarCodigo"
+                            class="w-fit flex justify-center items-center gap-2 bg-blue-600 text-white px-2 py-1 rounded">
                             <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none"
                                 viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
@@ -186,7 +163,7 @@
 
 
                     <button type="button" @click="agregarItem" class="mt-2 text-sm text-blue-600 hover:underline">+
-                        Agregar procedimiento</button>
+                        Agregar {{ cotizandoLaser ? 'Laser' : 'Procedimientos' }}</button>
                 </div>
 
                 <!-- insumos -->
@@ -253,7 +230,7 @@
 
                         <!-- Subtotal calculado -->
                         <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
-                                {{ formatCurrency(lente.cantidad * lente.valor) }}
+                            {{ formatCurrency(lente.cantidad * lente.valor) }}
                         </span>
 
                         <!-- Botón eliminar -->
@@ -288,7 +265,7 @@
                     <button @click="guardarCotizacion" :disabled="loading"
                         class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
 
-                        <span v-if="!loading" class="inline-block ml-2 ">Guardar cotización</span>
+                        <span v-if="!loading" class="inline-block ml-2 "> {{ mode == 'edit' ? 'Actualizar cotización' : 'Guardar cotización' }}</span>
                         <span v-else class="flex justify-center items-center gap-1 ml-2 ">
                             <svg width="32" height="32" viewBox="0 0 38 38">
                                 <g transform="translate(19 19)">
@@ -428,42 +405,15 @@ definePageMeta({
     middleware: ['sanctum:auth'],
 })
 
+const props = defineProps({
+    mode: { type: String, required: true }, // create | edit
+})
+
 import { Notivue, Notification, filledIcons } from 'notivue'
+const { getById, create, update } = useCotizacionApi()
+const { paciente, cotizacion, codificacion, totalCotizacion } = useCotizacionForm()
 const route = useRoute();
 const router = useRouter();
-
-const paciente = ref({
-    id: null,
-    tipo_identificacion: '',
-    numero_identificacion: '',
-    nombres: '',
-    apellidos: '',
-    correo: '',
-    telefono: '',
-    entidad_id: null
-})
-
-const cotizacion = ref({
-    origen: '',
-    tipo_gestion: '',
-    medico_id: '',
-    consultorio_id: '',
-    observaciones: '',
-    items: [],
-    insumos: [],
-    lentes: [],
-    total: 0
-})
-
-const codificacion = ref({
-    autorizacion: '',
-    copago: '0',
-    excedenteTope: '0',
-    lentes: '0',
-    preAnestesia: '0',
-    otros: '0',
-    fechaVigencia: ''
-});
 
 const entidades = ref([])
 const medicos = ref([])
@@ -484,6 +434,7 @@ const isdoctorDisabled = ref(false);
 const extracting = ref(true);
 const loadingPaciente = ref(false);
 const loadingBuscarCodigo = ref(false);
+const cotizandoLaser = ref(false);
 
 const toggleGrupo = (protartar) => {
     if (gruposAbiertos.value.has(protartar)) {
@@ -632,7 +583,7 @@ const buscarCodigo = async (codigo, index) => {
     try {
         loadingBuscarCodigo.value = true;
 
-        const { data, error } = await useSanctumFetch(`/api/codigos/buscar/${codigo}`);
+        const { data, error } = await useSanctumFetch(`/api/codigos/buscar/${codigo}?laser=${cotizandoLaser.value}`);
 
         if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
@@ -820,29 +771,28 @@ const onLenteValorInput = (val, index) => {
     lente.valor = numero;
 }
 
-const totalProcedimientos = computed(() => {
-    return cotizacion.value.items.reduce((acc, item) => {
-        const valor = item.valor_con_descuento ?? item.valor;
-        return acc + (valor * (item.cantidad ?? 1));
-    }, 0);
-});
+// const totalProcedimientos = computed(() => {
+//     return cotizacion.value.items.reduce((acc, item) => {
+//         const valor = item.valor_con_descuento ?? item.valor;
+//         return acc + (valor * (item.cantidad ?? 1));
+//     }, 0);
+// });
 
-const totalInsumos = computed(() => {
-    return cotizacion.value.insumos?.reduce((acc, insumo) => {
-        return acc + (insumo.valor * (insumo.cantidad ?? 1));
-    }, 0) || 0;
-});
+// const totalInsumos = computed(() => {
+//     return cotizacion.value.insumos?.reduce((acc, insumo) => {
+//         return acc + (insumo.valor * (insumo.cantidad ?? 1));
+//     }, 0) || 0;
+// });
 
-const totalLentes = computed(() => {
-    return cotizacion.value.lentes?.reduce((acc, lente) => {
-        return acc + (lente.valor * (lente.cantidad ?? 1));
-    }, 0) || 0;
-});
+// const totalLentes = computed(() => {
+//     return cotizacion.value.lentes?.reduce((acc, lente) => {
+//         return acc + (lente.valor * (lente.cantidad ?? 1));
+//     }, 0) || 0;
+// });
 
-const totalCotizacion = computed(() => {
-    return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
-});
-
+// const totalCotizacion = computed(() => {
+//     return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
+// });
 
 const buscarPaciente = async () => {
 
@@ -997,7 +947,7 @@ const guardarCotizacion = async () => {
             consultorio_id: cotizacion.value.consultorio_id,
             observaciones: cotizacion.value.observaciones,
 
-                // 🔹 Procedimientos
+            // 🔹 Procedimientos
             items: cotizacion.value.items.map(item => ({
                 codigo: item.codigo,
                 nombre: item.nombre,
@@ -1057,73 +1007,44 @@ const guardarCotizacion = async () => {
             };
         }
 
-        const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
-            method: 'POST',
-            body: payload,
-        });
-        console.log("👉 Respuesta al guardar cotización:", data, status, error, refresh);
+        // const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
+        //     method: 'POST',
+        //     body: payload,
+        // });
+        const result = {};
 
-        if (error.value) {
-            const validationErrors = error.value.data?.errors;
-
-            console.log("👉 Respuesta al guardar cotización:", validationErrors);
-
-            if (validationErrors && typeof validationErrors === 'object') {
-
-                const getFriendlyFieldName = (key) => {
-
-                    if (key.startsWith('items.')) {
-                        const match = key.match(/items\.(\d+)\.(.*)/);
-                        if (match) {
-                            const index = parseInt(match[1]) + 1;
-                            const field = match[2].replace(/_/g, ' ');
-                            const fieldCapitalized = field.charAt(0).toUpperCase() + field.slice(1);
-                            return `${fieldCapitalized} del Ítem ${index}`;
-                        }
-                    }
-                    return key.replace(/_/g, ' ').toUpperCase();
-                };
-
-                // Recorrer las CLAVES del objeto de errores
-                for (const fieldKey in validationErrors) {
-
-                    if (Object.hasOwnProperty.call(validationErrors, fieldKey)) {
-                        const messagesArray = validationErrors[fieldKey];
-
-                        if (Array.isArray(messagesArray)) {
-
-                            messagesArray.forEach(message => {
-                                pushNotification('error', message, 'Error de Validación');
-                            });
-                        }
-                    }
-                }
-            } else if (error.value.data?.message) {
-                pushNotification('error', error.value.data.message, 'Error');
+        if (props.mode === 'edit') {
+            result.value = await update(route.params.id, payload)
+            console.log("Editar cotización~ result:", result.value.data.value.success)
+            if (result.value.data.value.success) {
+                pushNotification('success', `Cotización editada con código:\n${result.value.data.value.codigo}`, 'Éxito');
             } else {
-                pushNotification('error', 'Ocurrió un error inesperado al guardar la cotización.', 'Error');
+                pushNotification('error', 'Error al editar cotización, validar datos', 'Error');
             }
-            return;
+        } else {
+            result.value = await create(payload)
+            console.log(" Crear cotización ~ result:", result.value.data.value.success)
+            if (result.value?.data?.value?.success) {
+                pushNotification('success', `Cotización creada con código:\n${result.value.data.value.codigo}`, 'Éxito');
+            }else {
+                pushNotification('error', 'Error al crear cotización, validar datos', 'Error');
+            }
         }
-
-
-        pushNotification('success', `Cotización creada con código:\n${data.value.codigo}`, 'Éxito');
-
 
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
         cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', preAnestesia: '', otros: '', fechaVigencia: '' };
+        cotizandoLaser.value = false;
 
-        // Redirigir a la vista de impresión con el id devuelto por el backend (espera 3 segundos)
-        const createdId = data.value?.id;
+        const createdId = result.value?.data?.value?.id;
         if (createdId) {
             setTimeout(() => {
                 router.push(`/cotizacion/imprimir/${createdId}`);
-            }, 3000);
+            }, 2500);
         }
 
-        
+
     } catch (err) {
         console.error('❌ Error inesperado:', err)
     } finally {

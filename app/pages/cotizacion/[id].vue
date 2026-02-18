@@ -416,10 +416,13 @@ const totalConDetalles = computed(() => {
         </span>
       </p>
       <div class="mt-4 flex justify-end items-center">
-        <div v-if="cotizacion">
+        <div v-if="cotizacion" class="flex justify-end items-center gap-2">
           <NuxtLink :to="`/cotizacion/imprimir/${cotizacion.id}`"
             class="bg-green-600 text-white mt-4 px-4 py-2 rounded">
             Imprimir {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }}</NuxtLink>
+          
+          <NuxtLink :to="`/cotizacion/editar/${cotizacion.id}`"
+            class="bg-blue-600 text-white mt-4 px-4 py-2 rounded"> Editar</NuxtLink>
         </div>
       </div>
     </div>
