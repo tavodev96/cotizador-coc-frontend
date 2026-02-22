@@ -111,13 +111,19 @@
                 </select>
 
                 <div class="md:col-span-2 mt-4">
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="checkbox" id="cotizar-laser" v-model="cotizandoLaser" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
-                        <label for="cotizar-laser" class="text-sm font-medium text-gray-700">Vas a cotizar laser</label>
+                    <div class="flex items-center gap-4 mb-2">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="cotizar-laser" v-model="cotizandoLaser" @change="handleLaserChange" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
+                            <label for="cotizar-laser" class="text-sm font-medium text-gray-700">Vas a cotizar laser</label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="cotizar-plastica" v-model="cotizandoPlasticaOcular" @change="handlePlasticaChange" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
+                            <label for="cotizar-plastica" class="text-sm font-medium text-gray-700">Vas a cotizar plastica ocular</label>
+                        </div>
                     </div>
                     <div class="flex items-center gap-2 mb-2">
                         
-                        <h3 class="text-lg font-bold">{{ cotizandoLaser ? 'Laser' : 'Procedimientos' }}</h3>
+                        <h3 class="text-lg font-bold">{{ cotizandoLaser ? 'Laser' : cotizandoPlasticaOcular ? 'Plastica Ocular' : 'Procedimientos' }}</h3>
                         <div v-if="loadingBuscarCodigo"
                             class="w-fit flex justify-center items-center gap-2 bg-blue-600 text-white px-2 py-1 rounded">
                             <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -141,7 +147,7 @@
                         <input v-model="item.nombre" placeholder="Nombre"
                             :class="[{ 'p-2 border rounded col-span-6': isCodificacion, 'p-2 border rounded col-span-4': !isCodificacion }]" />
 
-                        <select v-show="!isCodificacion" v-model="item.lateralidad" @change="aplicarFormulaLateralidad"
+                        <select v-show="!isCodificacion" v-model="item.lateralidad" @change="handleLateralidadChange"
                             class="p-2 border rounded col-span-2">
                             <option v-for="lateral in lateralidad" :key="lateral" :value="lateral">{{ lateral }}
                             </option>
@@ -163,7 +169,7 @@
 
 
                     <button type="button" @click="agregarItem" class="mt-2 text-sm text-blue-600 hover:underline">+
-                        Agregar {{ cotizandoLaser ? 'Laser' : 'Procedimientos' }}</button>
+                        Agregar {{ cotizandoLaser ? 'Laser' : cotizandoPlasticaOcular ? 'Plastica Ocular' : 'Procedimientos' }}</button>
                 </div>
 
                 <!-- insumos -->
@@ -341,7 +347,7 @@
             <h3 class="text-lg font-bold mb-4">Selecciona un código</h3>
 
             <!-- 🔹 Acordeón por grupo -->
-            <div v-for="(grupo, gIdx) in resultadosPaginados" :key="gIdx" class="mb-4 border rounded-lg shadow-sm">
+            <div v-for="(grupo, gIdx) in resultadosPaginados" :key="grupo.__index" class="mb-4 border rounded-lg shadow-sm">
                 <!-- Encabezado -->
                 <div class="flex justify-between items-center bg-blue-100 px-4 py-2 cursor-pointer hover:bg-blue-200"
                     @click="toggleGrupo(grupo.protartar)">
@@ -365,18 +371,18 @@
                     <div v-if="gruposAbiertos.has(grupo.protartar)" class="p-4">
                         <!-- Seleccionar todo el paquete -->
                         <div class="flex items-center mb-2">
-                            <input type="checkbox" :id="'paquete-' + gIdx" v-model="seleccionarTodo[gIdx]"
-                                @change="toggleSeleccionarTodo(grupo.items, gIdx)" class="mr-2" />
-                            <label :for="'paquete-' + gIdx" class="cursor-pointer font-semibold">
+                            <input type="checkbox" :id="'paquete-' + grupo.__index" v-model="seleccionarTodo[grupo.__index]"
+                                @change="toggleSeleccionarTodo(grupo.items, grupo.__index)" class="mr-2" />
+                            <label :for="'paquete-' + grupo.__index" class="cursor-pointer font-semibold">
                                 Seleccionar todo el paquete
                             </label>
                         </div>
 
                         <!-- ✅ Checkboxes individuales -->
                         <div v-for="(r, idx) in grupo.items" :key="idx" class="flex items-center mb-2">
-                            <input type="checkbox" :id="'codigo-' + gIdx + '-' + idx" :value="r"
+                            <input type="checkbox" :id="'codigo-' + grupo.__index + '-' + idx" :value="r"
                                 v-model="codigoSeleccionado" class="mr-2" />
-                            <label :for="'codigo-' + gIdx + '-' + idx" class="cursor-pointer">
+                            <label :for="'codigo-' + grupo.__index + '-' + idx" class="cursor-pointer">
                                 {{ r.protarpro }} - {{ r.actnom }} <br />
                                 (${{ r.protarval }}) <strong>{{ r.connom }}</strong>
                             </label>
@@ -385,10 +391,32 @@
                 </transition>
             </div>
 
+            <div v-if="totalPaginasResultados > 1" class="flex items-center justify-between mt-4">
+                <button type="button" @click="cambiarPaginaResultados(paginaResultados - 1)"
+                    :disabled="paginaResultados === 1"
+                    class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
+                    Anterior
+                </button>
+                <div class="flex items-center gap-2">
+                    <button v-for="p in paginasResultados" :key="p" type="button" @click="cambiarPaginaResultados(p)"
+                        :class="['px-3 py-1 rounded', p === paginaResultados ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300']">
+                        {{ p }}
+                    </button>
+                </div>
+                <button type="button" @click="cambiarPaginaResultados(paginaResultados + 1)"
+                    :disabled="paginaResultados === totalPaginasResultados"
+                    class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
+                    Siguiente
+                </button>
+            </div>
+
             <!-- Botones confirmar/cancelar -->
             <div class="mt-4 flex justify-end gap-2">
                 <button @click="showModal = false" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
                     Cancelar
+                </button>
+                <button type="button" @click="limpiarSeleccion" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">
+                    Deseleccionar
                 </button>
                 <button @click="confirmarCodigo" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     :disabled="codigoSeleccionado.length === 0">
@@ -419,7 +447,7 @@ const entidades = ref([])
 const medicos = ref([])
 const consultorios = ref([])
 const tiposGestion = ['cotización', 'información', 'codificación']
-const lateralidad = ['izquierda', 'derecha', 'ambos']
+const lateralidad = ['izquierda', 'derecha', 'bilateral']
 
 const showModal = ref(false)
 const resultadosCodigo = ref([])
@@ -435,6 +463,12 @@ const extracting = ref(true);
 const loadingPaciente = ref(false);
 const loadingBuscarCodigo = ref(false);
 const cotizandoLaser = ref(false);
+const cotizandoPlasticaOcular = ref(false);
+const tipoBusquedaCodigo = computed(() => {
+    if (cotizandoLaser.value) return 'laser';
+    if (cotizandoPlasticaOcular.value) return 'plastica_ocular';
+    return 'procedimientos';
+});
 
 const toggleGrupo = (protartar) => {
     if (gruposAbiertos.value.has(protartar)) {
@@ -471,9 +505,40 @@ const abrirModalLentes = () => {
 }
 
 
+const paginaResultados = ref(1);
+const tamanoPaginaResultados = 5;
+
+const resultadosConIndice = computed(() =>
+    resultadosCodigo.value.map((grupo, idx) => ({ ...grupo, __index: idx }))
+);
+
+const totalPaginasResultados = computed(() =>
+    Math.max(1, Math.ceil(resultadosConIndice.value.length / tamanoPaginaResultados))
+);
+
+const paginasResultados = computed(() =>
+    Array.from({ length: totalPaginasResultados.value }, (_, i) => i + 1)
+);
+
 const resultadosPaginados = computed(() => {
-    return resultadosCodigo.value
-})
+    const inicio = (paginaResultados.value - 1) * tamanoPaginaResultados;
+    return resultadosConIndice.value.slice(inicio, inicio + tamanoPaginaResultados);
+});
+
+const cambiarPaginaResultados = (pagina) => {
+    const total = totalPaginasResultados.value;
+    if (pagina < 1 || pagina > total) return;
+    paginaResultados.value = pagina;
+};
+
+const limpiarSeleccion = () => {
+    codigoSeleccionado.value = [];
+    seleccionarTodo.value = {};
+};
+
+watch(resultadosCodigo, () => {
+    paginaResultados.value = 1;
+});
 
 onMounted(async () => {
 
@@ -583,7 +648,9 @@ const buscarCodigo = async (codigo, index) => {
     try {
         loadingBuscarCodigo.value = true;
 
-        const { data, error } = await useSanctumFetch(`/api/codigos/buscar/${codigo}?laser=${cotizandoLaser.value}`);
+        const { data, error } = await useSanctumFetch(
+            `/api/codigos/buscar/${codigo}?laser=${cotizandoLaser.value}&plastica_ocular=${cotizandoPlasticaOcular.value}&tipo=${tipoBusquedaCodigo.value}`
+        );
 
         if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
@@ -626,7 +693,6 @@ const buscarCodigo = async (codigo, index) => {
                 acc[item.protartar].items.push(item);
                 return acc;
             }, {});
-            console.log(agrupado, "validando lo que esta pasando a la vista 😒");
 
             resultadosCodigo.value = Object.values(agrupado);
             itemSeleccionadoIndex.value = index;
@@ -669,7 +735,7 @@ const confirmarCodigo = () => {
         });
 
         // 🚨 Si ninguno era HMDQ => agregamos HONORARIOS CIRUJANO
-        if (tieneHMDQ === false) {
+        if (tieneHMDQ === false && cotizandoLaser.value === false) {
             // tomo el mismo protarpro de los seleccionados
             const codigoBase = codigoSeleccionado.value[0]?.protarpro || "SIN-CODIGO";
 
@@ -771,29 +837,6 @@ const onLenteValorInput = (val, index) => {
     lente.valor = numero;
 }
 
-// const totalProcedimientos = computed(() => {
-//     return cotizacion.value.items.reduce((acc, item) => {
-//         const valor = item.valor_con_descuento ?? item.valor;
-//         return acc + (valor * (item.cantidad ?? 1));
-//     }, 0);
-// });
-
-// const totalInsumos = computed(() => {
-//     return cotizacion.value.insumos?.reduce((acc, insumo) => {
-//         return acc + (insumo.valor * (insumo.cantidad ?? 1));
-//     }, 0) || 0;
-// });
-
-// const totalLentes = computed(() => {
-//     return cotizacion.value.lentes?.reduce((acc, lente) => {
-//         return acc + (lente.valor * (lente.cantidad ?? 1));
-//     }, 0) || 0;
-// });
-
-// const totalCotizacion = computed(() => {
-//     return totalProcedimientos.value + totalInsumos.value + totalLentes.value;
-// });
-
 const buscarPaciente = async () => {
 
     loadingPaciente.value = true;
@@ -825,6 +868,27 @@ const buscarPaciente = async () => {
         loadingPaciente.value = false;
     }
 };
+
+const handleLaserChange = () => {
+    // Si se activa láser, desactivar plastica ocular
+    if (cotizandoLaser.value) {
+        cotizandoPlasticaOcular.value = false;
+    }
+}
+
+const handlePlasticaChange = () => {
+    // Si se activa plastica ocular, desactivar láser
+    if (cotizandoPlasticaOcular.value) {
+        cotizandoLaser.value = false;
+    }
+}
+
+const handleLateralidadChange = () => {
+    // Solo aplicar la fórmula si NO está cotizando láser ni plastica ocular
+    if (!cotizandoLaser.value && !cotizandoPlasticaOcular.value) {
+        aplicarFormulaLateralidad();
+    }
+}
 
 const aplicarFormulaLateralidad = () => {
     // 1. Agrupar por procedimiento (protarpro) y lateralidad
@@ -936,6 +1000,29 @@ const valoresCodificacion = (nuevoObjeto) => {
     codificacion.value = nuevoObjeto;
 };
 
+
+// Watcher para vaciar cotizacion.items cuando cotizandoLaser cambie de estado
+watch(
+    () => cotizandoLaser.value,
+    (nuevo, anterior) => {
+        // Vaciar items si hay un cambio de estado y hay elementos
+        if (anterior !== undefined && cotizacion.value.items.length > 0) {
+            cotizacion.value.items = [];
+        }
+    }
+);
+
+// Watcher para vaciar cotizacion.items cuando cotizandoPlasticaOcular cambie de estado
+watch(
+    () => cotizandoPlasticaOcular.value,
+    (nuevo, anterior) => {
+        // Vaciar items si hay un cambio de estado y hay elementos
+        if (anterior !== undefined && cotizacion.value.items.length > 0) {
+            cotizacion.value.items = [];
+        }
+    }
+);
+
 const guardarCotizacion = async () => {
     loading.value = true;
     try {
@@ -1036,6 +1123,7 @@ const guardarCotizacion = async () => {
         cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', preAnestesia: '', otros: '', fechaVigencia: '' };
         cotizandoLaser.value = false;
+        cotizandoPlasticaOcular.value = false;
 
         const createdId = result.value?.data?.value?.id;
         if (createdId) {
