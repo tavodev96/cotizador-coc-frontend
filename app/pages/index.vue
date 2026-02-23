@@ -15,7 +15,7 @@
                     <div>
                         <a href="/login"
                             class="flex justify-center items-center bg-[#233972] text-white font-semibold py-2 px-4 rounded hover:scale-105 transition-transform duration-200">
-                            Cotizador de exámenes y procedimientos</a>
+                            Gestión Barra SAI</a>
                     </div>
                 </div>
 

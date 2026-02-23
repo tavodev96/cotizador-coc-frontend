@@ -1,5 +1,16 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  app: {
+    head: {
+      title: 'COFTAC', // default fallback title
+      htmlAttrs: {
+        lang: 'es',
+      },
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/COFTAC.ico' },
+      ],
+    },
+  },
   ssr: false,
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },

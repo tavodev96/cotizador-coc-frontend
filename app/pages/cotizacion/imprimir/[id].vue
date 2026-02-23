@@ -15,7 +15,18 @@ const loadingDescargar = ref(false)
 const loadingImprimir = ref(false)
 const privateContent = ref(false)
 
+// Detectar si viene desde la página de consultas
+const modoConsulta = computed(() => route.query.modo === 'consulta')
+
+// Estado para controlar si mostrar contenido agrupado (usado internamente en modo privado)
+const mostrarAgrupado = computed(() => privateContent.value || modoConsulta.value)
+
 onMounted(async () => {
+  // Si viene desde consultas, activar modo privado automáticamente
+  if (modoConsulta.value) {
+    privateContent.value = true
+  }
+
   try {
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}`)
     if (error.value) {
@@ -347,17 +358,25 @@ const descargarPDF = async () => {
             <th class="border px-2 py-2 text-sm">CUPS</th>
             <th class="border px-2 py-2">Nombre</th>
             <th class="border px-2 py-2">Lateralidad</th>
-            <th class="border px-2 py-2 text-right">Valor</th>
+            <th v-if="!modoConsulta" class="border px-2 py-2 text-right">Valor</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="privateContent" v-for="item in itemsAgrupados" :key="item.id">
+          <!-- Modo consulta: mostrar agrupado sin valores -->
+          <tr v-if="modoConsulta" v-for="(item, idx) in itemsAgrupados" :key="`consulta-${idx}`">
+            <td class="border px-2 py-2">{{ item.codigo }}</td>
+            <td class="border px-2 py-2">{{ item.nombre }}</td>
+            <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+          </tr>
+          <!-- Modo privado: mostrar agrupado con valores -->
+          <tr v-else-if="privateContent" v-for="(item, idx) in itemsAgrupados" :key="`privado-${idx}`">
             <td class="border px-2 py-2">{{ item.codigo }}</td>
             <td class="border px-2 py-2">{{ item.nombre }}</td>
             <td class="border px-2 py-2">{{ item.lateralidad }}</td>
             <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
           </tr>
-          <tr v-if="!privateContent" v-for="item in cotizacion?.items" :key="item.id">
+          <!-- Modo normal: mostrar todos los items con valores -->
+          <tr v-else v-for="(item, idx) in cotizacion?.items" :key="`normal-${idx}`">
             <td class="border px-2 py-2">{{ item.codigo }}</td>
             <td class="border px-2 py-2">{{ item.nombre }}</td>
             <td class="border px-2 py-2">{{ item.lateralidad }}</td>
@@ -366,8 +385,8 @@ const descargarPDF = async () => {
         </tbody>
       </table>
 
-      <!-- Agrupado por concepto -->
-      <div v-if="!privateContent">
+      <!-- Agrupado por concepto (mostrar en modo normal y modo consulta) -->
+      <div v-if="!privateContent || modoConsulta">
         <h2 class="text-base font-bold mb-2">AGRUPADO POR CONCEPTO</h2>
         <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
           <thead class="bg-[#172983] text-white">
@@ -384,8 +403,8 @@ const descargarPDF = async () => {
           </tbody>
         </table>
       </div>
-      <div v-if="privateContent && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
-        <!-- Insumos (agregados) -->
+      <div v-if="(modoConsulta || privateContent) && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+        <!-- Insumos (agregados con valores) -->
         <template v-if="detallesAgrupados.insumos.length > 0">
           <h2 class="text-base font-bold mb-2">INSUMOS</h2>
           <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
@@ -408,7 +427,7 @@ const descargarPDF = async () => {
           </table>
         </template>
 
-        <!-- Lentes (agregados) -->
+        <!-- Lentes (agregados con valores) -->
         <template v-if="detallesAgrupados.lentes.length > 0">
           <h2 class="text-base font-bold mb-2">LENTES</h2>
           <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
@@ -432,8 +451,8 @@ const descargarPDF = async () => {
         </template>
       </div>
 
-      <!-- Insumos -->
-      <div v-if="!privateContent && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+      <!-- Insumos y Lentes detallados (modo normal) -->
+      <div v-if="!privateContent && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
         <template v-if="detallesAgrupados.insumos.length > 0">
           <h2 class="text-base font-bold mb-2">INSUMOS</h2>
           <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
@@ -514,10 +533,11 @@ const descargarPDF = async () => {
 
     <div class="py-6 px-6 bg-white text-black max-w-5xl mx-auto">
       <div class="inline-flex items-center">
-        <label class="relative flex cursor-pointer items-center rounded-full p-3" for="login" data-ripple-dark="true">
+        <label class="relative flex items-center rounded-full p-3" :class="{'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta}" for="login" data-ripple-dark="true">
           <input id="login" type="checkbox"
-            class="before:content[''] peer relative h-5 w-5 cursor-pointer appearance-none rounded-md border border-blue-400 transition-all before:absolute before:top-2/4 before:left-2/4 before:block before:h-12 before:w-12 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-blue-gray-500 before:opacity-0 before:transition-opacity checked:border-blue-500 checked:bg-blue-500 checked:before:bg-blue-500 hover:before:opacity-10"
-            v-model="private" @change="togglePrivate" />
+            class="before:content[''] peer relative h-5 w-5 appearance-none rounded-md border border-blue-400 transition-all before:absolute before:top-2/4 before:left-2/4 before:block before:h-12 before:w-12 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-blue-gray-500 before:opacity-0 before:transition-opacity checked:border-blue-500 checked:bg-blue-500 checked:before:bg-blue-500 hover:before:opacity-10 disabled:cursor-not-allowed disabled:opacity-50"
+            :class="{'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta}"
+            v-model="privateContent" @change="togglePrivate" :disabled="modoConsulta" />
           <div
             class="pointer-events-none absolute top-2/4 left-2/4 -translate-y-2/4 -translate-x-2/4 text-white opacity-0 transition-opacity peer-checked:opacity-100">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"
@@ -528,9 +548,10 @@ const descargarPDF = async () => {
             </svg>
           </div>
         </label>
-        <label class="mt-px cursor-pointer select-none font-light text-gray-700" for="login">
+        <label class="mt-px select-none font-light" :class="{'cursor-pointer text-gray-700': !modoConsulta, 'cursor-not-allowed text-gray-400': modoConsulta}" for="login">
           Imprimir información de la <span class="font-bold ">{{ cotizacion?.tipo_gestion == 'cotización' ? 'cotización'
             : 'codificación' }} </span> para el paciente
+          <span v-if="modoConsulta" class="text-blue-600 text-xs block">(Modo consulta activado automáticamente)</span>
         </label>
       </div>
     </div>
@@ -540,7 +561,7 @@ const descargarPDF = async () => {
         <span v-if="loadingImprimir">Imprimiendo...</span>
         <span v-else>🖨 Imprimir</span>
       </button>
-      <button class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded"
+      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded"
         v-tippy="{ content: 'Muy pronto, estamos en construcción' }">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
           viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
@@ -549,7 +570,7 @@ const descargarPDF = async () => {
         </svg>
         Correo electrónico
       </button>
-      <button class="flex justify-center items-center gap-2 bg-red-600 text-white mt-4 px-4 py-2 rounded"
+      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 bg-red-600 text-white mt-4 px-4 py-2 rounded"
         @click="descargarPDF" :disabled="loadingDescargar">
         <template v-if="!loadingDescargar">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
