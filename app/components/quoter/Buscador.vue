@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const props = defineProps({
     reset: Boolean
@@ -10,6 +10,7 @@ const emit = defineEmits(['resultados'])
 const filtros = ref({
     codigo: '',
     documento: '',
+    tipo_gestion: '',
     fecha_inicio: '',
     fecha_fin: '',
     medico_id: '',
@@ -32,14 +33,21 @@ const mostrarDropdownAsesores = ref(false)
 
 const loading = ref(false)
 
+const normalizar = (texto) =>
+    String(texto || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+
 // Filtrar médicos mientras el usuario escribe
 const medicosFiltrados = computed(() => {
     if (!buscadorMedico.value.trim()) {
         return medicos.value
     }
     return medicos.value.filter(medico => {
-        const nombre = medico.nombre?.toLowerCase() || ''
-        return nombre.includes(buscadorMedico.value.toLowerCase())
+        const nombre = normalizar(medico.nombre)
+        return nombre.includes(normalizar(buscadorMedico.value))
     })
 })
 
@@ -49,8 +57,8 @@ const entidadesFiltradas = computed(() => {
         return entidades.value
     }
     return entidades.value.filter(entidad => {
-        const nombre = entidad.nombre?.toLowerCase() || ''
-        return nombre.includes(buscadorEntidad.value.toLowerCase())
+        const nombre = normalizar(entidad.nombre)
+        return nombre.includes(normalizar(buscadorEntidad.value))
     })
 })
 
@@ -60,8 +68,8 @@ const asesoresFiltrados = computed(() => {
         return asesores.value
     }
     return asesores.value.filter(asesor => {
-        const nombre = asesor.nombre?.toLowerCase() || ''
-        return nombre.includes(buscadorAsesor.value.toLowerCase())
+        const nombre = normalizar(asesor.nombre || asesor.name)
+        return nombre.includes(normalizar(buscadorAsesor.value))
     })
 })
 
@@ -111,7 +119,7 @@ const limpiarEntidad = () => {
 const seleccionarAsesor = (asesor) => {
     console.log('Asesor seleccionado:', asesor.id, asesor)
     filtros.value.asesor_id = asesor.id
-    buscadorAsesor.value = asesor.name
+    buscadorAsesor.value = asesor.nombre || asesor.name
     mostrarDropdownAsesores.value = false
 }
 
@@ -119,6 +127,45 @@ const limpiarAsesor = () => {
     filtros.value.asesor_id = ''
     buscadorAsesor.value = ''
     mostrarDropdownAsesores.value = false
+}
+
+const seleccionarPrimeraCoincidencia = (tipo) => {
+    if (tipo === 'medico' && medicosFiltrados.value.length === 1) {
+        seleccionarMedico(medicosFiltrados.value[0])
+        return
+    }
+
+    if (tipo === 'entidad' && entidadesFiltradas.value.length === 1) {
+        seleccionarEntidad(entidadesFiltradas.value[0])
+        return
+    }
+
+    if (tipo === 'asesor' && asesoresFiltrados.value.length === 1) {
+        seleccionarAsesor(asesoresFiltrados.value[0])
+    }
+}
+
+const cerrarDropdowns = () => {
+    mostrarDropdownMedicos.value = false
+    mostrarDropdownEntidades.value = false
+    mostrarDropdownAsesores.value = false
+}
+
+const handleClickOutsideDropdowns = (event) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    if (!target.closest('[data-dropdown="medico"]')) {
+        mostrarDropdownMedicos.value = false
+    }
+
+    if (!target.closest('[data-dropdown="entidad"]')) {
+        mostrarDropdownEntidades.value = false
+    }
+
+    if (!target.closest('[data-dropdown="asesor"]')) {
+        mostrarDropdownAsesores.value = false
+    }
 }
 
 const buscar = async () => {
@@ -131,6 +178,7 @@ const buscar = async () => {
                 documento: filtros.value.documento,
                 fecha_inicio: filtros.value.fecha_inicio,
                 fecha_fin: filtros.value.fecha_fin,
+                tipo_gestion: filtros.value.tipo_gestion,
                 medico_id: filtros.value.medico_id,
                 entidad_id: filtros.value.entidad_id,
                 asesor_id: filtros.value.asesor_id,
@@ -153,11 +201,17 @@ const buscar = async () => {
 
 onMounted(() => {
     cargarCatalogos()
+    document.addEventListener('click', handleClickOutsideDropdowns)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutsideDropdowns)
 })
 
 watch(() => props.reset, () => {
     filtros.value.codigo = ''
     filtros.value.documento = ''
+    filtros.value.tipo_gestion = ''
     filtros.value.fecha_inicio = ''
     filtros.value.fecha_fin = ''
     filtros.value.medico_id = ''
@@ -167,78 +221,90 @@ watch(() => props.reset, () => {
     buscadorEntidad.value = ''
     buscadorAsesor.value = ''
     registros.value = []
+    cerrarDropdowns()
 })
 </script>
 
 <template>
-    <div class="flex gap-2 mb-4">
-        <input v-model="filtros.codigo" placeholder="Código" class="w-1/6 border p-1" />
-        <input v-model="filtros.documento" placeholder="Documento" class="w-1/6 border p-1" />
+    <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <input v-model="filtros.codigo" placeholder="Código" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" />
+        <input v-model="filtros.documento" placeholder="Documento" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" />
+        <select v-model="filtros.tipo_gestion" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
+            <option value="" selected disabled>Tipo de gestión</option>
+            <option value="cotización">Cotización</option>
+            <option value="información">Información</option>
+            <option value="codificación">Codificación</option>
+        </select>
         
         <!-- Select buscable para médicos -->
-        <div class="relative w-1/6">
+        <div class="relative w-full" data-dropdown="medico">
             <div class="relative">
-                <input v-model="buscadorMedico" placeholder="Médico" class="w-full border p-1"
-                    @focus="mostrarDropdownMedicos = true" @blur="mostrarDropdownMedicos = false" />
+                <input v-model="buscadorMedico" placeholder="Médico" class="w-full h-11 border border-slate-300 rounded-lg px-3 pr-8 bg-white"
+                    @focus="mostrarDropdownMedicos = true" @keydown.enter.prevent="seleccionarPrimeraCoincidencia('medico')" @keydown.esc="mostrarDropdownMedicos = false" />
                 <button v-if="filtros.medico_id" @click="limpiarMedico"
-                    class="absolute right-1 top-1 text-gray-400 hover:text-gray-600">
+                    class="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600">
                     ✕
                 </button>
             </div>
             <div v-if="mostrarDropdownMedicos && medicosFiltrados.length > 0"
-                class="absolute top-full left-0 right-0 bg-white border border-t-0 max-h-48 overflow-y-auto z-10"
+                class="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-20 shadow-sm"
                 @mousedown.prevent>
                 <div v-for="medico in medicosFiltrados" :key="medico.id" @mousedown.prevent="seleccionarMedico(medico)"
-                    class="p-2 hover:bg-blue-100 cursor-pointer">
+                    class="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm text-slate-700">
                     {{ medico.nombre }}
                 </div>
             </div>
         </div>
 
         <!-- Select buscable para entidades -->
-        <div class="relative w-1/6">
+        <div class="relative w-full" data-dropdown="entidad">
             <div class="relative">
-                <input v-model="buscadorEntidad" placeholder="Entidad" class="w-full border p-1"
-                    @focus="mostrarDropdownEntidades = true" @blur="mostrarDropdownEntidades = false" />
+                <input v-model="buscadorEntidad" placeholder="Entidad" class="w-full h-11 border border-slate-300 rounded-lg px-3 pr-8 bg-white"
+                    @focus="mostrarDropdownEntidades = true" @keydown.enter.prevent="seleccionarPrimeraCoincidencia('entidad')" @keydown.esc="mostrarDropdownEntidades = false" />
                 <button v-if="filtros.entidad_id" @click="limpiarEntidad"
-                    class="absolute right-1 top-1 text-gray-400 hover:text-gray-600">
+                    class="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600">
                     ✕
                 </button>
             </div>
             <div v-if="mostrarDropdownEntidades && entidadesFiltradas.length > 0"
-                class="absolute top-full left-0 right-0 bg-white border border-t-0 max-h-48 overflow-y-auto z-10"
+                class="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-20 shadow-sm"
                 @mousedown.prevent>
                 <div v-for="entidad in entidadesFiltradas" :key="entidad.id" @mousedown.prevent="seleccionarEntidad(entidad)"
-                    class="p-2 hover:bg-blue-100 cursor-pointer">
+                    class="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm text-slate-700">
                     {{ entidad.nombre }}
                 </div>
             </div>
         </div>
 
         <!-- Select buscable para asesores -->
-        <div class="relative w-1/6">
+        <div class="relative w-full" data-dropdown="asesor">
             <div class="relative">
-                <input v-model="buscadorAsesor" placeholder="Asesor" class="w-full border p-1"
-                    @focus="mostrarDropdownAsesores = true" @blur="mostrarDropdownAsesores = false" />
+                <input v-model="buscadorAsesor" placeholder="Asesor" class="w-full h-11 border border-slate-300 rounded-lg px-3 pr-8 bg-white"
+                    @focus="mostrarDropdownAsesores = true" @keydown.enter.prevent="seleccionarPrimeraCoincidencia('asesor')" @keydown.esc="mostrarDropdownAsesores = false" />
                 <button v-if="filtros.asesor_id" @click="limpiarAsesor"
-                    class="absolute right-1 top-1 text-gray-400 hover:text-gray-600">
+                    class="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600">
                     ✕
                 </button>
             </div>
             <div v-if="mostrarDropdownAsesores && asesoresFiltrados.length > 0"
-                class="absolute top-full left-0 right-0 bg-white border border-t-0 max-h-48 overflow-y-auto z-10"
+                class="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-20 shadow-sm"
                 @mousedown.prevent>
                 <div v-for="asesor in asesoresFiltrados" :key="asesor.id" @mousedown.prevent="seleccionarAsesor(asesor)"
-                    class="p-2 hover:bg-blue-100 cursor-pointer">
-                    {{ asesor.name }}
+                    class="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm text-slate-700">
+                    {{ asesor.nombre || asesor.name }}
                 </div>
             </div>
         </div>
 
-        <input type="date" v-model="filtros.fecha_inicio" class="w-1/6 border p-1" />
-        <input type="date" v-model="filtros.fecha_fin" class="w-1/6 border p-1" />
-        <button @click="buscar" class="w-1/6 bg-[#162983] text-white px-3 py-1 hover:bg-blue-900" :disabled="loading">
-            {{ loading ? 'Buscando...' : 'Buscar' }}
-        </button>
+        <input type="date" v-model="filtros.fecha_inicio" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
+        <input type="date" v-model="filtros.fecha_fin" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
+        </div>
+
+        <div class="flex justify-end">
+            <button @click="buscar" class="inline-flex items-center justify-center h-11 px-6 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
+                {{ loading ? 'Buscando...' : 'Buscar' }}
+            </button>
+        </div>
     </div>
 </template>

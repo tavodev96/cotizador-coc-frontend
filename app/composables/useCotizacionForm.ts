@@ -30,6 +30,7 @@ export const useCotizacionForm = () => {
     preAnestesia: '0',
     otros: '0',
     fechaVigencia: '',
+    fechaAutorizacion: '',
   }))
 
   const totalProcedimientos = computed(() =>
@@ -65,5 +66,7 @@ export const useCotizacionForm = () => {
     cotizacion,
     codificacion,
     totalCotizacion,
+    totalInsumos,
+    totalLentes,
   }
 }

@@ -1,11 +1,15 @@
 <template>
-    <div>
-        <div v-if="loading" class="p-6 text-center flex flex-col items-center gap-3">
+    <div class="space-y-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900">Editar cotización</h1>
+            <p class="text-sm text-slate-600 mt-1">Actualiza la información manteniendo la estructura existente.</p>
+        </div>
+        <div v-if="loading" class="p-6 text-center flex flex-col items-center gap-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
             <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
-            <div class="text-gray-700">Consultando información para editar…</div>
+            <div class="text-slate-700">Consultando información para editar…</div>
         </div>
         <QuoteForm v-else mode="edit" @submit="guardar" />
     </div>

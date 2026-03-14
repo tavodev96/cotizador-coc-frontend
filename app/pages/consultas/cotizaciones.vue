@@ -1,79 +1,102 @@
 <template>
-    <div class="p-6">
-        <h2 class="text-2xl font-bold">Consultar Cotizaciones</h2>
-        <p>Busca con numero de historia que tiene el paciente en <span
-                class="uppercase text-blue-900 font-bold">Servinte</span></p>
+    <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
+            <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Consultar cotizaciones</h1>
+            <p class="text-sm text-slate-600">
+                Busca con número de historia del paciente en
+                <span class="uppercase text-indigo-700 font-semibold">Servinte</span>.
+            </p>
 
-        <div class="flex items-center gap-4 mt-4">
-            <input v-model="search" type="text" placeholder="Número de historia"
-                class="border border-gray-300 rounded px-4 py-2 w-full md:w-auto focus:outline-none focus:ring-2 focus:ring-blue-500"
-                @keyup.enter="fetchCotizaciones"
-                :disabled="cargando">
-            <button @click="fetchCotizaciones" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="cargando">
-                {{ cargando ? "Buscando..." : "Buscar" }}
-            </button>
-            <button v-if="cotizaciones.length > 0 || search" @click="limpiarResultados" 
-                class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                :disabled="cargando">
-                Limpiar
-            </button>
-        </div>
+            <div class="flex flex-col md:flex-row md:items-center gap-3">
+                <input
+                    v-model="search"
+                    type="text"
+                    placeholder="Número de historia"
+                    class="w-full md:max-w-sm h-11 border border-slate-300 rounded-lg px-3 bg-white"
+                    @keyup.enter="fetchCotizaciones"
+                    :disabled="cargando"
+                >
+                <button
+                    @click="fetchCotizaciones"
+                    class="h-11 px-5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="cargando"
+                >
+                    {{ cargando ? "Buscando..." : "Buscar" }}
+                </button>
+                <button
+                    v-if="cotizaciones.length > 0 || search"
+                    @click="limpiarResultados"
+                    class="h-11 px-5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium"
+                    :disabled="cargando"
+                >
+                    Limpiar
+                </button>
+            </div>
+        </section>
 
-        <div v-if="cotizaciones.length === 0 && !cargando" class="mt-6 text-center text-gray-500">
-            <p>No hay cotizaciones para mostrar. Realiza una búsqueda.</p>
-        </div>
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-slate-600">{{ cotizaciones.length }} resultado{{ cotizaciones.length === 1 ? '' : 's' }}</p>
+            </div>
 
-        <div v-if="cargando" class="mt-6 text-center">
-            <p class="text-gray-600">Cargando...</p>
-        </div>
+            <div v-if="cargando" class="py-10 text-center text-slate-500">
+                Cargando...
+            </div>
 
-        <div v-if="cotizaciones.length > 0" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div v-for="cotizacion in cotizaciones" :key="cotizacion.id"
-                class="bg-white shadow-md rounded-xl p-4 border hover:shadow-lg transition h-fit">
-                <div class="flex">
-                    <h3 class="text-lg font-semibold text-blue-900">
+            <div v-else-if="cotizaciones.length === 0" class="py-10 text-center text-slate-500">
+                No hay cotizaciones para mostrar. Realiza una búsqueda.
+            </div>
+
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <article
+                    v-for="cotizacion in cotizaciones"
+                    :key="cotizacion.id"
+                    class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition h-fit"
+                >
+                    <h3 class="text-base font-semibold text-slate-900">
                         {{ obtenerPrimerProcedimiento(cotizacion) }}
                     </h3>
-                </div>
 
-                <p class="text-sm text-gray-600 mt-2">
-                    <span class="font-medium">Código:</span>
-                    {{ cotizacion.codigo }}
-                </p>
+                    <p class="text-sm text-slate-600 mt-2">
+                        <span class="font-medium">Código:</span>
+                        {{ cotizacion.codigo }}
+                    </p>
 
-                <p class="text-sm text-gray-600 mt-2">
-                    <span class="font-medium">Fecha:</span>
-                    {{ formatearFecha(cotizacion.fecha_recepcion) }}
-                </p>
+                    <p class="text-sm text-slate-600 mt-1">
+                        <span class="font-medium">Fecha:</span>
+                        {{ formatearFecha(cotizacion.fecha_recepcion) }}
+                    </p>
 
-                <p class="text-sm text-gray-600">
-                    <span class="font-medium">Médico:</span>
-                    {{ obtenerNombreMedico(cotizacion) }}
-                </p>
+                    <p class="text-sm text-slate-600 mt-1">
+                        <span class="font-medium">Médico:</span>
+                        {{ obtenerNombreMedico(cotizacion) }}
+                    </p>
 
-                <p class="text-sm text-gray-600">
-                    <span class="font-medium">Estado: </span>
-                    <span class="font-semibold" :class="{
-                        'text-green-600': cotizacion.estado?.nombre === 'Aprobada',
-                        'text-yellow-600': cotizacion.estado?.nombre === 'Pendiente',
-                        'text-red-600': cotizacion.estado?.nombre === 'Rechazada'
-                    }">
-                        {{ cotizacion.estado?.nombre || 'Sin estado' }}
-                    </span>
-                </p>
+                    <p class="text-sm text-slate-600 mt-1">
+                        <span class="font-medium">Estado:</span>
+                        <span class="font-semibold" :class="{
+                            'text-green-600': cotizacion.estado?.nombre === 'Aprobada',
+                            'text-yellow-600': cotizacion.estado?.nombre === 'Pendiente',
+                            'text-red-600': cotizacion.estado?.nombre === 'Rechazada'
+                        }">
+                            {{ cotizacion.estado?.nombre || 'Sin estado' }}
+                        </span>
+                    </p>
 
-                <div class="mt-2 flex justify-between items-center gap-2">
-                    <nuxt-link :to="`/cotizacion/imprimir/${cotizacion.id}?modo=consulta`" class="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600">
-                        Ver Cotización
-                    </nuxt-link>
-                    <span class="text-xs font-semibold text-white bg-neutral-600 px-2 py-1 rounded-full">
-                        {{ cotizacion.paciente?.numero_identificacion || 'Sin historia' }}
-                    </span>
-                </div>
-
+                    <div class="mt-3 flex justify-between items-center gap-2">
+                        <nuxt-link
+                            :to="`/cotizacion/imprimir/${cotizacion.id}?modo=consulta`"
+                            class="inline-flex items-center h-9 px-3 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-sm font-medium"
+                        >
+                            Ver cotización
+                        </nuxt-link>
+                        <span class="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-full">
+                            {{ cotizacion.paciente?.numero_identificacion || 'Sin historia' }}
+                        </span>
+                    </div>
+                </article>
             </div>
-        </div>
+        </section>
     </div>
 </template>
 

@@ -27,9 +27,19 @@
                     @blur="handleBlur('otros')" />
             </div>
             <div class="flex flex-col gap-1">
+                <label class="font-semibold">Insumos:</label>
+                <input :value="formatearNumero(props.insumos || 0)" placeholder="Valor" 
+                    class="p-2 border rounded col-span-2 bg-gray-100" type="text" disabled />
+            </div>
+            <div class="flex flex-col gap-1">
                 <label class="font-semibold">Fecha de vigencia:</label>
                 <input v-model="fechaVigencia" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
                     @change="handleBlur('fechaVigencia')" />
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="font-semibold">Fecha de autorización:</label>
+                <input v-model="fechaAutorizacion" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
+                    @change="handleBlur('fechaAutorizacion')" />
             </div>
         </div>
     </div>
@@ -41,7 +51,8 @@ import { ref, watch, defineEmits } from 'vue';
 const emit = defineEmits(['update:valores']);
 
 const props = defineProps({
-    lentes: String
+    lentes: String,
+    insumos: Number
 });
 
 const values = {
@@ -50,10 +61,12 @@ const values = {
     lentes: ref(props.lentes),
     preAnestesia: ref(''),
     otros: ref(''),
-    fechaVigencia: ref('')
+    fechaVigencia: ref(''),
+    insumos: ref(props.insumos || 0),
+    fechaAutorizacion: ref('')
 };
 
-const { copago, excedenteTope, lentes, preAnestesia, otros, fechaVigencia } = values;
+const { copago, excedenteTope, lentes, preAnestesia, otros, fechaVigencia, insumos, fechaAutorizacion } = values;
 
 const formatearNumero = (valor) => {
     const valorLimpio = String(valor).replace(/[^\d]/g, '');
@@ -76,16 +89,19 @@ const handleBlur = (key) => {
     const reactiveRef = values[key];
     const dataToSend = {};
 
-    if (key === 'fechaVigencia') {
-        dataToSend.fechaVigencia = reactiveRef.value;
+    if (key === 'fechaVigencia' || key === 'fechaAutorizacion') {
+        dataToSend[key] = reactiveRef.value;
     } else if (reactiveRef && reactiveRef.value) {
         const valorLimpio = String(reactiveRef.value).replace(/[^\d]/g, '');
         reactiveRef.value = formatearNumero(valorLimpio);
     }
 
     for (const prop in values) {
-        if (prop === 'fechaVigencia') {
+        if (prop === 'fechaVigencia' || prop === 'fechaAutorizacion') {
             dataToSend[prop] = values[prop].value;
+        } else if (prop === 'insumos') {
+            // No enviar insumos ya que es de solo lectura
+            continue;
         } else {
             const cleanedValue = String(values[prop].value).replace(/[^\d]/g, '');
             dataToSend[prop] = cleanedValue;
@@ -99,5 +115,10 @@ const handleBlur = (key) => {
 watch(() => props.lentes, (newValue) => {
     lentes.value = newValue;
     handleBlur('lentes');
+}, { immediate: true })
+
+watch(() => props.insumos, (newValue) => {
+    insumos.value = newValue;
+    handleBlur('insumos');
 }, { immediate: true })
 </script>

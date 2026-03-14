@@ -1,14 +1,25 @@
 <template>
-  <div class="fixed bg-white text-blue-800 px-10 py-1 z-10 w-full">
-    <div class="flex items-center justify-between py-2 text-5x1">
-      <div class="font-bold text-blue-900 text-xl">
-        <img src="/img/logo_clinica_oftalmologia.png" class="w-40" alt="">
+  <header class="fixed top-0 inset-x-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur px-4 md:px-6 xl:px-8">
+    <div class="max-w-[1600px] mx-auto flex items-center justify-between py-3">
+      <div class="font-bold text-indigo-900 text-xl flex items-center gap-3">
+        <img
+          src="/img/logo_clinica_oftalmologia.png"
+          class="w-36 md:w-40"
+          alt="Clínica de Oftalmología"
+          loading="eager"
+          fetchpriority="high"
+          decoding="sync"
+        >
       </div>
-      <div class="flex items-center text-gray-500">
-        <div class="bg-center bg-cover bg-no-repeat rounded-full inline-block h-12 w-12 ml-2"
+      <div class="flex items-center gap-3 text-slate-500">
+        <div class="hidden md:block text-right">
+          <p class="text-sm font-medium text-slate-700">Sistema de cotización</p>
+          <p class="text-xs text-slate-500">Gestión clínica</p>
+        </div>
+        <div class="bg-center bg-cover bg-no-repeat rounded-full inline-block h-11 w-11 ring-2 ring-slate-200"
           style="background-image: url(/img/user.png)">
         </div>
       </div>
     </div>
-  </div>
+  </header>
 </template>
