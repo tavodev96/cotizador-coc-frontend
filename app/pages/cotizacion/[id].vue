@@ -21,6 +21,12 @@ const loadingEstados = ref(false)
 const intendedEstado = ref(null)
 const mostrarModalComentario = ref(false)
 const estadoSeleccionadoTemp = ref(null)
+const fechaProgramadaTemp = ref('')
+
+const normalizarFechaInput = (value) => {
+  if (!value) return ''
+  return String(value).slice(0, 10)
+}
 
 const fetchDetalle = async () => {
   try {
@@ -36,6 +42,7 @@ const fetchDetalle = async () => {
     historico_estados.value = [...data.value.estados]
     estadoSeleccionado.value = cotizacion.value.estado_id
     estadoSeleccionadoTemp.value = cotizacion.value.estado_id
+    fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_programada)
 
   } catch (err) {
     console.error('Error capturado en fetchDetalle:', err)
@@ -107,13 +114,19 @@ const agregarComentario = async () => {
   }
 }
 
-const realizarCambioEstado = async (estadoId) => {
+const realizarCambioEstado = async (estadoId, options = {}) => {
   try {
     loadingEstados.value = true
 
+    const payload = {
+      estado: estadoId,
+      comentario_cambio_estado: options.comentario || null,
+      fecha_programada: Number(estadoId) === 5 ? (options.fechaProgramada || null) : null,
+    }
+
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
       method: 'PUT',
-      body: { estado: estadoId }
+      body: payload
     })
 
     if (error.value || !data.value?.success) {
@@ -149,38 +162,58 @@ const cambiarEstado = async () => {
   const requiereComentario = [4, 6]
 
   const estadoActual = cotizacion.value?.estado_id
+  const fechaProgramadaActual = normalizarFechaInput(cotizacion.value?.fecha_programada)
+  const fechaProgramadaNueva = normalizarFechaInput(fechaProgramadaTemp.value)
 
   intendedEstado.value = nueva
 
   const requiereComentarioNuevo = requiereComentario.includes(Number(nueva))
   const requiereComentarioSalida = requiereComentario.includes(Number(estadoActual)) && Number(nueva) !== Number(estadoActual)
+  const saleDeProgramada = Number(estadoActual) === 5 && Number(nueva) !== 5
+  const cambiaFechaProgramada = Number(estadoActual) === 5 && Number(nueva) === 5 && fechaProgramadaActual !== fechaProgramadaNueva
 
-  if ((requiereComentarioNuevo || requiereComentarioSalida) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
+  if (Number(nueva) === Number(estadoActual) && fechaProgramadaActual === fechaProgramadaNueva) {
+    pushNotification('info', 'No hay cambios para guardar en estado/fecha programada.', 'Sin cambios')
+    return
+  }
+
+  if (Number(nueva) === 5 && !fechaProgramadaNueva) {
+    pushNotification('error', 'Debes seleccionar la fecha programada para el estado PROGRAMADA.', 'Error')
+    return
+  }
+
+  if ((requiereComentarioNuevo || requiereComentarioSalida || saleDeProgramada || cambiaFechaProgramada) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
     mostrarModalComentario.value = true
     estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
     return
   }
 
-  await realizarCambioEstado(nueva)
+  await realizarCambioEstado(nueva, {
+    comentario: nuevoComentario.value?.trim() || null,
+    fechaProgramada: fechaProgramadaNueva || null,
+  })
 }
 
 const enviarComentarioYEstado = async () => {
-  const ok = await agregarComentario()
-  if (!ok) return
-
   if (intendedEstado.value) {
-    await realizarCambioEstado(intendedEstado.value)
+    await realizarCambioEstado(intendedEstado.value, {
+      comentario: nuevoComentario.value?.trim() || null,
+      fechaProgramada: normalizarFechaInput(fechaProgramadaTemp.value) || null,
+    })
     estadoSeleccionadoTemp.value = intendedEstado.value
   }
 
   // Cerrar modal y limpiar
   mostrarModalComentario.value = false
   intendedEstado.value = null
+  nuevoComentario.value = ''
 }
 
 const cancelarModalComentario = () => {
   mostrarModalComentario.value = false
   estadoSeleccionado.value = cotizacion.value?.estado_id || null
+  estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
+  fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value?.fecha_programada)
   intendedEstado.value = null
 }
 
@@ -245,8 +278,8 @@ const totalConDetalles = computed(() => {
 </script>
 
 <template>
-  <div v-show="loading">
-    <div class="flex justify-center items-center gap-2">
+  <div v-show="loading" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
+    <div class="flex justify-center items-center gap-2 text-slate-700">
       <span class="flex items-center gap-2">
         <svg class="w-10" fill="hsl(228, 97%, 42%)" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <circle cx="4" cy="12" r="3">
@@ -268,33 +301,44 @@ const totalConDetalles = computed(() => {
       </span>
     </div>
   </div>
-  <div v-show="!loading">
+  <div v-show="!loading" class="space-y-5">
     <Notivue v-slot="item">
       <Notification :item="item" :icons="filledIcons" />
     </Notivue>
-    <div class="flex items-center justify-between mb-4">
+    <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
       <div class="flex flex-col gap-2">
-        <h2 class="text-xl font-bold"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
+        <h2 class="text-2xl font-semibold text-slate-900"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
           cotizacion?.codigo }}</h2>
-        <p><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
-        <p><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
-        <p><span class="font-bold">Estado:</span> <span
-            class="bg-[#172983] text-white rounded-full px-2 py-1 text-sm">{{ cotizacion?.estado.nombre }}</span></p>
-        <p v-if="cotizacion?.codificacion"><span class="font-bold">Codificación:</span> <span
-            class="bg-[#208317] text-white rounded-full px-2 py-1 text-sm">{{
+        <p class="text-slate-700"><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
+        <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
+        <p class="text-slate-700"><span class="font-bold">Estado:</span> <span
+            class="bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.estado.nombre }}</span></p>
+        <p v-if="cotizacion?.fecha_programada" class="text-slate-700">
+          <span class="font-bold">Fecha programada:</span>
+          <span class="bg-amber-100 text-amber-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.fecha_programada }}</span>
+        </p>
+        <p v-if="cotizacion?.codificacion" class="text-slate-700"><span class="font-bold">Codificación:</span> <span
+            class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{
               cotizacion?.codificacion?.numero_autorizacion }}</span></p>
       </div>
-      <div>
-        <div class="mt-4 flex justify-center items-center gap-2">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div class="flex flex-wrap items-center gap-2">
           <label for="estado" class="font-semibold">Cambiar estado:</label>
-          <select v-model="estadoSeleccionadoTemp" id="estado" class="border p-2 rounded-lg w-32">
+          <select v-model="estadoSeleccionadoTemp" id="estado" class="border border-slate-300 p-2 rounded-lg w-40 bg-white">
             <option disabled value="" selected>Estados</option>
             <option v-for="estado in estadosAdministrativos" :value="estado.id" :key="estado.id">
               {{ estado.nombre }}
             </option>
           </select>
+          <input
+            v-if="Number(estadoSeleccionadoTemp) === 5"
+            v-model="fechaProgramadaTemp"
+            type="date"
+            class="border border-slate-300 p-2 rounded-lg bg-white"
+          />
           <button @click="cambiarEstado"
-            class="flex justify-center items-center gap-2 ml-2 bg-[#172983] text-white px-4 py-2 rounded-lg"
+            class="flex justify-center items-center gap-2 bg-indigo-700 text-white px-4 py-2 rounded-lg"
             :disabled="loadingEstados">
             <template v-if="!loadingEstados">Actualizar</template>
             <template v-else>
@@ -311,16 +355,17 @@ const totalConDetalles = computed(() => {
           <h3 class="font-semibold">Historial de Estados:</h3>
           <div class="flex justify-end">
             <button @click="mostrarModalHistorico = true"
-              class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+              class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition">
               Ver histórico
             </button>
           </div>
         </div>
       </div>
     </div>
+    </section>
 
-    <div class="w-full">
-      <h3 class="mt-4 font-semibold">Items</h3>
+    <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 w-full">
+      <h3 class="text-lg font-semibold text-slate-900">Items</h3>
       <ul>
         <li v-for="(item, index) in (cotizacion?.codificacion ?
           cotizacion.items.filter((item, i, arr) =>
@@ -341,7 +386,7 @@ const totalConDetalles = computed(() => {
           </span>
         </li>
       </ul>
-      <h3 class="mt-4 font-semibold">Insumos</h3>
+      <h3 class="mt-6 font-semibold text-slate-900">Insumos</h3>
       <ul>
         <li v-for="detalle in cotizacion?.detalles" :key="detalle.id" class="flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
@@ -357,7 +402,7 @@ const totalConDetalles = computed(() => {
       </ul>
 
       <div v-if="cotizacion?.codificacion?.numero_autorizacion">
-        <h3 class="mt-4 font-semibold">Autorización</h3>
+        <h3 class="mt-6 font-semibold text-slate-900">Autorización</h3>
         <ul>
           <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
@@ -402,33 +447,34 @@ const totalConDetalles = computed(() => {
           </li>
         </ul>
       </div>
-      <div>
-        <h3 class="my-2 font-semibold">Observaciones:</h3>
-        <textarea class="w-fit h-fit border rounded p-2 resize-none font-semibold"
+      <div class="mt-6">
+        <h3 class="my-2 font-semibold text-slate-900">Observaciones:</h3>
+        <textarea class="w-full min-h-28 border border-slate-300 rounded-xl p-3 resize-none font-medium bg-slate-50"
           :disabled="cotizacion?.observaciones">{{
             cotizacion?.observaciones }}</textarea>
       </div>
-      <p v-show="!cotizacion?.codificacion?.numero_autorizacion" class="mt-4">
+      <p v-show="!cotizacion?.codificacion?.numero_autorizacion" class="mt-6">
         <span>
-          <b>Total:</b> <span class="text-[#172983] font-bold text-2xl">
+          <b>Total:</b> <span class="text-indigo-700 font-bold text-2xl">
             ${{ totalConDetalles }}
           </span>
         </span>
       </p>
-      <div class="mt-4 flex justify-end items-center">
+      <div class="mt-6 flex justify-end items-center">
         <div v-if="cotizacion" class="flex justify-end items-center gap-2">
           <NuxtLink :to="`/cotizacion/imprimir/${cotizacion.id}`"
-            class="bg-green-600 text-white mt-4 px-4 py-2 rounded">
+            class="bg-emerald-600 text-white px-4 py-2 rounded-lg">
             Imprimir {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }}</NuxtLink>
           
           <NuxtLink :to="`/cotizacion/editar/${cotizacion.id}`"
-            class="bg-blue-600 text-white mt-4 px-4 py-2 rounded"> Editar</NuxtLink>
+            class="bg-indigo-700 text-white px-4 py-2 rounded-lg"> Editar</NuxtLink>
         </div>
       </div>
-    </div>
+    </section>
 
-    <h3 class="mt-4 text-xl font-bold">Comentarios</h3>
-    <div v-for="com in cotizacion?.comentarios" :key="com.id" class="border p-2 mb-2">
+    <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
+    <h3 class="text-xl font-semibold text-slate-900 mb-4">Comentarios</h3>
+    <div v-for="com in cotizacion?.comentarios" :key="com.id" class="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50/60">
       <p><b>{{ com.usuario.name }} - {{ formatoFecha(com.created_at) }}</b>: {{ com.comentario }}</p>
       <div v-if="com.adjuntos.length > 0" class="mt-2">
         <p>Archivos adjuntos:</p>
@@ -446,13 +492,13 @@ const totalConDetalles = computed(() => {
       </div>
     </div>
 
-    <div class="mt-4 border-t pt-4">
+    <div class="mt-4 border-t border-slate-200 pt-4">
       <div class="flex flex-col">
-        <textarea v-model="nuevoComentario" placeholder="Escribe un comentario" class="border p-2 w-full"
+        <textarea v-model="nuevoComentario" placeholder="Escribe un comentario" class="border border-slate-300 rounded-xl p-3 w-full"
           :disabled="savingComentario"></textarea>
         <input type="file" multiple @change="onFileChange" class="mt-2" />
         <button @click="agregarComentario" :disabled="savingComentario"
-          class="w-fit bg-green-500 text-white px-4 py-2 mt-4 rounded-lg flex items-center gap-2">
+          class="w-fit bg-emerald-600 text-white px-4 py-2 mt-4 rounded-lg flex items-center gap-2">
           <template v-if="!savingComentario">Agregar comentario</template>
           <template v-else>
             <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -464,11 +510,12 @@ const totalConDetalles = computed(() => {
         </button>
       </div>
     </div>
+    </section>
   </div>
 
   <!-- Modal -->
-  <div v-if="mostrarModalHistorico" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+  <div v-if="mostrarModalHistorico" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg relative border border-slate-200">
 
       <!-- Botón cerrar -->
       <button @click="mostrarModalHistorico = false"
@@ -489,22 +536,21 @@ const totalConDetalles = computed(() => {
     </div>
   </div>
 
-  <div v-if="mostrarModalComentario" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+  <div v-if="mostrarModalComentario" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg relative border border-slate-200">
       <button @click="cancelarModalComentario"
         class="absolute top-3 right-3 text-gray-600 hover:text-black text-xl">✕</button>
       <h3 class="text-lg font-bold mb-4">Comentario requerido</h3>
-      <p class="mb-4">Este cambio de estado requiere que ingreses un comentario. Por favor escribe el comentario antes
+      <p class="mb-4">Este cambio requiere que ingreses un comentario (estado o fecha programada). Por favor escribe el comentario antes
         de
         continuar.</p>
       <textarea v-model="nuevoComentario" placeholder="Escribe un comentario"
-        class="w-full border p-2 h-28 mb-4"></textarea>
-      <input type="file" multiple @change="onFileChange" class="mb-4" />
+        class="w-full border border-slate-300 rounded-xl p-3 h-28 mb-4"></textarea>
       <div class="flex justify-end gap-2">
-        <button @click="cancelarModalComentario" class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+        <button @click="cancelarModalComentario" class="px-4 py-2 bg-slate-200 rounded-lg">Cancelar</button>
         <button @click="enviarComentarioYEstado" :disabled="savingComentario"
-          class="px-4 py-2 bg-blue-600 text-white rounded">
-          <template v-if="!savingComentario">Enviar comentario y cambiar estado</template>
+          class="px-4 py-2 bg-indigo-700 text-white rounded-lg">
+          <template v-if="!savingComentario">Confirmar cambio</template>
           <template v-else>Enviando...</template>
         </button>
       </div>

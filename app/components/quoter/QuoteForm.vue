@@ -1,6 +1,6 @@
 <template>
-    <div class="bg-white rounded-xl shadow p-6 max-w-6xl mx-auto">
-        <div v-if="extracting" class="max-w-5xl mx-auto p-4 bg-white rounded shadow">
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-6xl mx-auto shadow-sm">
+        <div v-if="extracting" class="max-w-5xl mx-auto p-6 bg-white border border-slate-200 rounded-2xl">
             <div class="flex justify-center items-center gap-2">
                 <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                     aria-hidden="true">
@@ -11,30 +11,35 @@
                 <span class="text-gray-600">Extrayendo información...</span>
             </div>
         </div>
-        <div v-else class="max-w-5xl mx-auto p-4 bg-white rounded shadow">
-            <h2 class="text-xl font-bold mb-4">Crear Cotización</h2>
+        <div v-else class="max-w-5xl mx-auto p-4 bg-white border border-slate-200 rounded-2xl space-y-5">
+            <h2 class="text-2xl font-semibold text-slate-900">Crear Cotización</h2>
             <Notivue v-slot="item">
                 <Notification :item="item" :icons="filledIcons" class="text-2xl" />
             </Notivue>
             <!-- Paciente -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <h3 class="text-base font-semibold text-slate-800 mb-3">Información del paciente</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="font-semibold">Tipo de identificación</label>
-                    <select v-model="paciente.tipo_identificacion" class="w-full h-12 border rounded p-2"
-                        :disabled="paciente.id">
-                        <option value="CC">CC</option>
-                        <option value="CE">CE</option>
-                        <option value="TI">TI</option>
-                        <option value="PA">PA</option>
-                    </select>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Tipo de identificación</label>
+                    <input
+                        v-model="paciente.tipo_identificacion"
+                        list="tipos-identificacion"
+                        class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
+                        :disabled="paciente.id"
+                        @blur="validarTipoIdentificacion"
+                    />
+                    <datalist id="tipos-identificacion">
+                        <option v-for="tipo in tiposIdentificacion" :key="tipo" :value="tipo" />
+                    </datalist>
                 </div>
                 <div>
-                    <label class="font-semibold">Número de identificación</label>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Número de identificación</label>
                     <div class="flex gap-2">
                         <input v-model="paciente.numero_identificacion" type="text"
-                            class="w-full h-12 border rounded p-2" :disabled="paciente.id" />
+                            class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white" :disabled="paciente.id" />
                         <button type="button" @click="buscarPaciente"
-                            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                            class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                             :disabled="loadingPaciente">
                             <span v-if="loadingPaciente">Buscando...</span>
                             <span v-else>Buscar</span>
@@ -43,72 +48,166 @@
                 </div>
 
                 <div>
-                    <label class="font-semibold">Nombres</label>
-                    <input v-model="paciente.nombres" type="text" class="w-full h-12 border rounded p-2"
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Nombres</label>
+                    <input v-model="paciente.nombres" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
                         :disabled="paciente.id" />
                 </div>
                 <div>
-                    <label class="font-semibold">Apellidos</label>
-                    <input v-model="paciente.apellidos" type="text" class="w-full h-12 border rounded p-2"
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Apellidos</label>
+                    <input v-model="paciente.apellidos" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
                         :disabled="paciente.id" />
                 </div>
                 <div>
-                    <label class="font-semibold">Correo</label>
-                    <input v-model="paciente.correo" type="email" class="w-full h-12 border rounded p-2"
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Correo</label>
+                    <input v-model="paciente.correo" type="email" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
                         :disabled="paciente.id" />
                 </div>
                 <div>
-                    <label class="font-semibold">Teléfono</label>
-                    <input v-model="paciente.telefono" type="text" class="w-full h-12 border rounded p-2"
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Teléfono</label>
+                    <input v-model="paciente.telefono" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
                         :disabled="paciente.id" />
                 </div>
                 <div>
-                    <label class="font-semibold">Entidad</label>
-                    <!-- :disabled="paciente.id" -->
-                    <select v-model="paciente.entidad_id" class="w-full h-12 border rounded p-2">
-                        <option v-for="entidad in entidades" :key="entidad.id" :value="entidad.id">{{ entidad.nombre }}
-                        </option>
-                    </select>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Entidad</label>
+                    <div class="relative" data-dropdown="entidad">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.3-4.3" />
+                        </svg>
+                        <input
+                            v-model="buscadorEntidad"
+                            class="w-full h-12 border border-slate-300 rounded-lg pl-10 pr-3 bg-white"
+                            placeholder="Buscar entidad"
+                            @focus="mostrarDropdownEntidad = true"
+                            @keydown.enter.prevent="seleccionarPrimeraCoincidencia('entidad')"
+                            @keydown.esc="mostrarDropdownEntidad = false"
+                        />
+                        <div
+                            v-if="mostrarDropdownEntidad"
+                            class="absolute z-20 w-full bg-white border border-slate-200 rounded-lg mt-1 max-h-56 overflow-y-auto"
+                            @mousedown.prevent
+                        >
+                            <template v-if="entidadesFiltradas.length">
+                                <button
+                                    v-for="entidad in entidadesFiltradas"
+                                    :key="entidad.id"
+                                    type="button"
+                                    class="w-full text-left px-3 py-2 hover:bg-slate-100"
+                                    @click="seleccionarEntidad(entidad)"
+                                >
+                                    {{ entidad.nombre }}
+                                </button>
+                            </template>
+                            <p v-else class="px-3 py-2 text-sm text-slate-500">Sin resultados</p>
+                        </div>
+                    </div>
                 </div>
                 <div>
-                    <label class="font-semibold">Origen:</label>
-                    <select v-model="cotizacion.origen" class="w-full h-12 border rounded p-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Origen:</label>
+                    <select v-model="cotizacion.origen" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white">
                         <option value="" select disabled>Seleccionar origen del ordenamiento</option>
                         <option value="1">Consultorio privado</option>
                         <option value="2">Consultorio institucional</option>
                     </select>
                 </div>
             </div>
+            </div>
 
             <!-- Cotización -->
-            <div class="mt-6">
-                <label class="font-semibold">Fecha de recepción</label>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+                <h3 class="text-base font-semibold text-slate-800">Información de cotización</h3>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Fecha de recepción</label>
                 <input type="text" :value="new Date().toISOString().split('T')[0]"
-                    class="w-full h-12 border rounded p-2 bg-gray-100" disabled />
+                    class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-slate-100" disabled />
 
                 <div :class="[{ 'flex items-center justify-center gap-2 mt-4': isCodificacion }]">
                     <div :class="[{ 'w-1/2': isCodificacion, 'w-full mt-4': !isCodificacion }]">
-                        <label class="font-semibold mt-4">Tipo de gestión</label>
-                        <select v-model="cotizacion.tipo_gestion" class="w-full h-12 border rounded p-2">
-                            <option v-for="tipo in tiposGestion" :key="tipo" :value="tipo">{{ tipo }}</option>
-                        </select>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Tipo de gestión</label>
+                        <input
+                            v-model="cotizacion.tipo_gestion"
+                            list="tipos-gestion"
+                            class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
+                            @blur="validarTipoGestion"
+                        />
+                        <datalist id="tipos-gestion">
+                            <option v-for="tipo in tiposGestion" :key="tipo" :value="tipo" />
+                        </datalist>
                     </div>
                     <div v-if="isCodificacion" class="w-1/2">
-                        <label class="font-semibold">Número de autorización</label>
-                        <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border rounded p-2" />
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Número de autorización</label>
+                        <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white" />
                     </div>
                 </div>
                 <!-- :disabled="isdoctorDisabled" -->
-                <label class="font-semibold mt-4 block">Médico</label>
-                <select v-model="cotizacion.medico_id" class="w-full h-12 border rounded p-2">
-                    <option v-for="medico in medicos" :key="medico.id" :value="medico.id">{{ medico.nombre }}</option>
-                </select>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Médico</label>
+                <div class="relative" data-dropdown="medico">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <input
+                        v-model="buscadorMedico"
+                        class="w-full h-12 border border-slate-300 rounded-lg pl-10 pr-3 bg-white"
+                        placeholder="Buscar médico"
+                        :disabled="isdoctorDisabled"
+                        @focus="mostrarDropdownMedico = true"
+                        @keydown.enter.prevent="seleccionarPrimeraCoincidencia('medico')"
+                        @keydown.esc="mostrarDropdownMedico = false"
+                    />
+                    <div
+                        v-if="mostrarDropdownMedico"
+                        class="absolute z-20 w-full bg-white border border-slate-200 rounded-lg mt-1 max-h-56 overflow-y-auto"
+                        @mousedown.prevent
+                    >
+                        <template v-if="medicosFiltrados.length">
+                            <button
+                                v-for="medico in medicosFiltrados"
+                                :key="medico.id"
+                                type="button"
+                                class="w-full text-left px-3 py-2 hover:bg-slate-100"
+                                @click="seleccionarMedico(medico)"
+                            >
+                                {{ medico.nombre }}
+                            </button>
+                        </template>
+                        <p v-else class="px-3 py-2 text-sm text-slate-500">Sin resultados</p>
+                    </div>
+                </div>
 
-                <label class="font-semibold mt-4 block">Consultorio</label>
-                <select v-model="cotizacion.consultorio_id" class="w-full h-12 border rounded p-2"
-                    :disabled="isconsultorioDisabled">
-                    <option v-for="c in consultorios" :key="c.id" :value="c.id">{{ c.nombre }}</option>
-                </select>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Consultorio</label>
+                <div class="relative" data-dropdown="consultorio">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <input
+                        v-model="buscadorConsultorio"
+                        class="w-full h-12 border border-slate-300 rounded-lg pl-10 pr-3 bg-white"
+                        placeholder="Buscar consultorio"
+                        :disabled="isconsultorioDisabled"
+                        @focus="mostrarDropdownConsultorio = true"
+                        @keydown.enter.prevent="seleccionarPrimeraCoincidencia('consultorio')"
+                        @keydown.esc="mostrarDropdownConsultorio = false"
+                    />
+                    <div
+                        v-if="mostrarDropdownConsultorio"
+                        class="absolute z-20 w-full bg-white border border-slate-200 rounded-lg mt-1 max-h-56 overflow-y-auto"
+                        @mousedown.prevent
+                    >
+                        <template v-if="consultoriosFiltrados.length">
+                            <button
+                                v-for="consultorio in consultoriosFiltrados"
+                                :key="consultorio.id"
+                                type="button"
+                                class="w-full text-left px-3 py-2 hover:bg-slate-100"
+                                @click="seleccionarConsultorio(consultorio)"
+                            >
+                                {{ consultorio.nombre }} ({{ consultorio.codigo }})
+                            </button>
+                        </template>
+                        <p v-else class="px-3 py-2 text-sm text-slate-500">Sin resultados</p>
+                    </div>
+                </div>
 
                 <div class="md:col-span-2 mt-4">
                     <div class="flex items-center gap-4 mb-2">
@@ -136,39 +235,47 @@
                             <span>Buscando código...</span>
                         </div>
                     </div>
+
+                    <div v-if="procedimientosFormulados.length" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p class="text-sm font-semibold text-amber-800">Procedimientos formulados desde ordenamiento</p>
+                        <ul v-if="procedimientosFormulados.length" class="mt-2 list-disc pl-5 text-sm text-amber-900 space-y-1">
+                            <li v-for="(proc, idx) in procedimientosFormulados" :key="`formulado-${idx}`">{{ proc }}</li>
+                        </ul>
+                    </div>
+
                     <div v-for="(item, index) in cotizacion.items" :key="index"
-                        class="grid grid-cols-12 gap-2 mb-2 items-center">
+                        class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
 
                         <input v-model="item.codigo" @blur="buscarCodigo(item.codigo, index)" placeholder="Código"
                             class="p-2 border rounded"
-                            :class="[{ 'col-span-3': isCodificacion, 'col-span-2': !isCodificacion }]" />
+                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-2': !isCodificacion }]" />
 
 
                         <input v-model="item.nombre" placeholder="Nombre"
-                            :class="[{ 'p-2 border rounded col-span-6': isCodificacion, 'p-2 border rounded col-span-4': !isCodificacion }]" />
+                            :class="[{ 'p-2 border rounded md:col-span-6': isCodificacion, 'p-2 border rounded md:col-span-4': !isCodificacion }]" />
 
                         <select v-show="!isCodificacion" v-model="item.lateralidad" @change="handleLateralidadChange"
-                            class="p-2 border rounded col-span-2">
+                            class="p-2 border rounded md:col-span-2">
                             <option v-for="lateral in lateralidad" :key="lateral" :value="lateral">{{ lateral }}
                             </option>
                         </select>
 
                         <input v-show="!isCodificacion" :value="formatearNumero(item.valor_con_descuento ?? item.valor)"
-                            placeholder="Valor" class="p-2 border rounded col-span-2" type="text"
+                            placeholder="Valor" class="p-2 border rounded md:col-span-2" type="text"
                             @input="onItemValorInput($event.target.value, index)" />
 
 
                         <input v-show="!isCodificacion" v-model.number="item.descuento" placeholder="% Desc"
-                            @change="calcularTotal(index)" class="p-2 border rounded col-span-1" type="number" min="0"
+                            @change="calcularTotal(index)" class="p-2 border rounded md:col-span-1" type="number" min="0"
                             max="100" />
 
 
                         <button @click="eliminarItem(index)"
-                            class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
+                            class="text-red-600 font-bold text-xl hover:text-red-800 md:col-span-1 justify-self-end">×</button>
                     </div>
 
 
-                    <button type="button" @click="agregarItem" class="mt-2 text-sm text-blue-600 hover:underline">+
+                    <button type="button" @click="agregarItem" class="mt-2 text-sm text-[#162983] font-medium hover:underline">+
                         Agregar {{ cotizandoLaser ? 'Laser' : cotizandoPlasticaOcular ? 'Plastica Ocular' : 'Procedimientos' }}</button>
                 </div>
 
@@ -178,33 +285,33 @@
                     <h3 class="text-lg font-bold mb-2">Insumos</h3>
 
                     <div v-for="(insumo, index) in cotizacion.insumos" :key="index"
-                        class="grid grid-cols-12 gap-2 mb-2 items-center">
+                        class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
 
                         <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded"
-                            :class="[{ 'col-span-3': isCodificacion, 'col-span-1': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
                         <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4"
-                            :class="[{ 'col-span-6': isCodificacion, 'col-span-4': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-6': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
                         <input v-show="!isCodificacion" v-model.number="insumo.valor" type="hidden" />
                         <input v-show="!isCodificacion" :value="formatearNumero(insumo.valor)" type="text"
-                            class="p-2 border rounded col-span-2" placeholder="Valor"
+                            class="p-2 border rounded md:col-span-2" placeholder="Valor"
                             @input="onInsumoValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
                         <input v-show="!isCodificacion" v-model.number="insumo.cantidad" placeholder="Cantidad"
-                            type="number" min="1" class="p-2 border rounded col-span-2" />
+                            type="number" min="1" class="p-2 border rounded md:col-span-2" />
 
                         <!-- Subtotal calculado -->
-                        <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
+                        <span v-show="!isCodificacion" class="md:col-span-2 text-right font-semibold">
                             {{ formatCurrency(insumo.cantidad * insumo.valor) }}
                         </span>
 
                         <button @click="eliminarInsumo(index)"
-                            class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
+                            class="text-red-600 font-bold text-xl hover:text-red-800 md:col-span-1 justify-self-end">×</button>
                     </div>
 
-                    <button type="button" @click="abrirModalInsumos" class="mt-2 text-sm text-blue-600 hover:underline">
+                    <button type="button" @click="abrirModalInsumos" class="mt-2 text-sm text-[#162983] font-medium hover:underline">
                         + Agregar insumo
                     </button>
                 </div>
@@ -214,38 +321,38 @@
                     <h3 class="text-lg font-bold mb-2">Lentes</h3>
 
                     <div v-for="(lente, index) in cotizacion.lentes" :key="index"
-                        class="grid grid-cols-12 gap-2 mb-2 items-center">
+                        class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
 
                         <!-- Código -->
                         <input v-model="lente.codigo" placeholder="Código" class="p-2 border rounded"
-                            :class="[{ 'col-span-3': isCodificacion, 'col-span-1': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
 
                         <!-- Nombre -->
                         <input v-model="lente.nombre" placeholder="Nombre" class="p-2 border rounded"
-                            :class="[{ 'col-span-6': isCodificacion, 'col-span-4': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-6': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
                         <input v-model.number="lente.valor" type="hidden" />
                         <input v-show="!isCodificacion" :value="formatearNumero(lente.valor)" type="text"
-                            class="p-2 border rounded col-span-2" placeholder="Valor"
+                            class="p-2 border rounded md:col-span-2" placeholder="Valor"
                             @input="onLenteValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
                         <input v-show="!isCodificacion" v-model.number="lente.cantidad" placeholder="Cantidad"
-                            type="number" min="1" class="p-2 border rounded col-span-2" />
+                            type="number" min="1" class="p-2 border rounded md:col-span-2" />
 
                         <!-- Subtotal calculado -->
-                        <span v-show="!isCodificacion" class="col-span-2 text-right font-semibold">
+                        <span v-show="!isCodificacion" class="md:col-span-2 text-right font-semibold">
                             {{ formatCurrency(lente.cantidad * lente.valor) }}
                         </span>
 
                         <!-- Botón eliminar -->
                         <button @click="eliminarLente(index)"
-                            class="text-red-600 font-bold text-xl hover:text-red-800 col-span-1">×</button>
+                            class="text-red-600 font-bold text-xl hover:text-red-800 md:col-span-1 justify-self-end">×</button>
                     </div>
 
                     <!-- Botón abrir modal -->
-                    <button type="button" @click="abrirModalLentes" class="mt-2 text-sm text-blue-600 hover:underline">
+                    <button type="button" @click="abrirModalLentes" class="mt-2 text-sm text-[#162983] font-medium hover:underline">
                         + Agregar lente
                     </button>
                 </div>
@@ -259,17 +366,17 @@
                     @select="agregarInsumo" />
 
                 <QuoterCodificacion v-if="isCodificacion" @update:valores="valoresCodificacion" class="mt-4"
-                    :lentes="totalLentes" />
+                    :lentes="totalLentes" :insumos="totalInsumos" />
 
-                <div class="mt-4 text-right text-xl font-bold">
+                <div v-show="!isCodificacion" class="mt-4 text-right text-xl font-bold">
                     Valor total cotización: {{ formatCurrency(totalCotizacion) }}
                 </div>
 
-                <label class="font-semibold mt-4 block">Observaciones</label>
-                <textarea v-model="cotizacion.observaciones" class="w-full h-24 border rounded p-2"></textarea>
-                <div class="flex justify-center items-center gap-2">
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Observaciones</label>
+                <textarea v-model="cotizacion.observaciones" class="w-full h-24 border border-slate-300 rounded-lg p-3 bg-white"></textarea>
+                <div class="sticky bottom-3 z-10 md:static bg-white/95 md:bg-transparent backdrop-blur-sm md:backdrop-blur-0 border border-slate-200 md:border-0 rounded-xl md:rounded-none p-3 md:p-0 flex justify-center items-center gap-2">
                     <button @click="guardarCotizacion" :disabled="loading"
-                        class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        class="mt-0 md:mt-4 w-full md:w-auto px-5 py-2.5 bg-[#162983] text-white rounded-lg hover:bg-blue-800 shadow-sm">
 
                         <span v-if="!loading" class="inline-block ml-2 "> {{ mode == 'edit' ? 'Actualizar cotización' : 'Guardar cotización' }}</span>
                         <span v-else class="flex justify-center items-center gap-1 ml-2 ">
@@ -342,9 +449,9 @@
     </div>
 
     <!-- Modal selección de códigos -->
-    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
-            <h3 class="text-lg font-bold mb-4">Selecciona un código</h3>
+    <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xl p-6 w-full max-w-2xl">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Selecciona un código</h3>
 
             <!-- 🔹 Acordeón por grupo -->
             <div v-for="(grupo, gIdx) in resultadosPaginados" :key="grupo.__index" class="mb-4 border rounded-lg shadow-sm">
@@ -439,7 +546,7 @@ const props = defineProps({
 
 import { Notivue, Notification, filledIcons } from 'notivue'
 const { getById, create, update } = useCotizacionApi()
-const { paciente, cotizacion, codificacion, totalCotizacion } = useCotizacionForm()
+const { paciente, cotizacion, codificacion, totalCotizacion, totalInsumos, totalLentes } = useCotizacionForm()
 const route = useRoute();
 const router = useRouter();
 
@@ -448,6 +555,15 @@ const medicos = ref([])
 const consultorios = ref([])
 const tiposGestion = ['cotización', 'información', 'codificación']
 const lateralidad = ['izquierda', 'derecha', 'bilateral']
+const tiposIdentificacion = ['CC', 'CE', 'TI', 'PA']
+
+const buscadorEntidad = ref('')
+const buscadorMedico = ref('')
+const buscadorConsultorio = ref('')
+
+const mostrarDropdownEntidad = ref(false)
+const mostrarDropdownMedico = ref(false)
+const mostrarDropdownConsultorio = ref(false)
 
 const showModal = ref(false)
 const resultadosCodigo = ref([])
@@ -456,6 +572,7 @@ const itemSeleccionadoIndex = ref(null)
 const gruposAbiertos = ref(new Set());
 const codigoSeleccionado = ref([]);
 const seleccionarTodo = ref({});
+const procedimientosFormulados = ref([])
 const loading = ref(false);
 const isconsultorioDisabled = ref(false);
 const isdoctorDisabled = ref(false);
@@ -469,6 +586,138 @@ const tipoBusquedaCodigo = computed(() => {
     if (cotizandoPlasticaOcular.value) return 'plastica_ocular';
     return 'procedimientos';
 });
+
+const normalizar = (texto) =>
+    String(texto || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+
+const entidadesFiltradas = computed(() => {
+    const termino = normalizar(buscadorEntidad.value)
+    if (!termino) return entidades.value
+
+    return entidades.value.filter((entidad) =>
+        normalizar(entidad.nombre).includes(termino)
+    )
+})
+
+const medicosFiltrados = computed(() => {
+    const termino = normalizar(buscadorMedico.value)
+    if (!termino) return medicos.value
+
+    return medicos.value.filter((medico) =>
+        normalizar(medico.nombre).includes(termino)
+    )
+})
+
+const consultoriosFiltrados = computed(() => {
+    const termino = normalizar(buscadorConsultorio.value)
+    if (!termino) return consultorios.value
+
+    return consultorios.value.filter((consultorio) =>
+        normalizar(consultorio.nombre).includes(termino) ||
+        normalizar(consultorio.codigo).includes(termino)
+    )
+})
+
+const seleccionarEntidad = (entidad) => {
+    paciente.value.entidad_id = Number(entidad.id)
+    buscadorEntidad.value = entidad.nombre
+    mostrarDropdownEntidad.value = false
+}
+
+const seleccionarMedico = (medico) => {
+    cotizacion.value.medico_id = Number(medico.id)
+    buscadorMedico.value = medico.nombre
+    mostrarDropdownMedico.value = false
+}
+
+const seleccionarConsultorio = (consultorio) => {
+    cotizacion.value.consultorio_id = Number(consultorio.id)
+    buscadorConsultorio.value = `${consultorio.nombre} (${consultorio.codigo})`
+    mostrarDropdownConsultorio.value = false
+}
+
+const seleccionarPrimeraCoincidencia = (tipo) => {
+    if (tipo === 'entidad' && entidadesFiltradas.value.length === 1) {
+        seleccionarEntidad(entidadesFiltradas.value[0])
+        return
+    }
+
+    if (tipo === 'medico' && medicosFiltrados.value.length === 1) {
+        seleccionarMedico(medicosFiltrados.value[0])
+        return
+    }
+
+    if (tipo === 'consultorio' && consultoriosFiltrados.value.length === 1) {
+        seleccionarConsultorio(consultoriosFiltrados.value[0])
+    }
+}
+
+const cerrarDropdowns = () => {
+    mostrarDropdownEntidad.value = false
+    mostrarDropdownMedico.value = false
+    mostrarDropdownConsultorio.value = false
+}
+
+const handleClickOutsideDropdowns = (event) => {
+    const target = event.target
+
+    if (!(target instanceof Element)) return
+
+    if (!target.closest('[data-dropdown="entidad"]')) {
+        mostrarDropdownEntidad.value = false
+    }
+
+    if (!target.closest('[data-dropdown="medico"]')) {
+        mostrarDropdownMedico.value = false
+    }
+
+    if (!target.closest('[data-dropdown="consultorio"]')) {
+        mostrarDropdownConsultorio.value = false
+    }
+}
+
+const validarTipoIdentificacion = () => {
+    if (!tiposIdentificacion.includes(paciente.value.tipo_identificacion)) {
+        paciente.value.tipo_identificacion = tiposIdentificacion[0]
+    }
+}
+
+const validarTipoGestion = () => {
+    if (!tiposGestion.includes(cotizacion.value.tipo_gestion)) {
+        cotizacion.value.tipo_gestion = tiposGestion[0]
+    }
+}
+
+watch(
+    [entidades, () => paciente.value.entidad_id],
+    () => {
+        const entidad = entidades.value.find((e) => Number(e.id) === Number(paciente.value.entidad_id))
+        buscadorEntidad.value = entidad?.nombre || ''
+    },
+    { immediate: true }
+)
+
+watch(
+    [medicos, () => cotizacion.value.medico_id],
+    () => {
+        const medico = medicos.value.find((m) => Number(m.id) === Number(cotizacion.value.medico_id))
+        buscadorMedico.value = medico?.nombre || ''
+    },
+    { immediate: true }
+)
+
+watch(
+    [consultorios, () => cotizacion.value.consultorio_id],
+    () => {
+        const consultorio = consultorios.value.find((c) => Number(c.id) === Number(cotizacion.value.consultorio_id))
+        buscadorConsultorio.value = consultorio ? `${consultorio.nombre} (${consultorio.codigo})` : ''
+    },
+    { immediate: true }
+)
 
 const toggleGrupo = (protartar) => {
     if (gruposAbiertos.value.has(protartar)) {
@@ -540,6 +789,30 @@ watch(resultadosCodigo, () => {
     paginaResultados.value = 1;
 });
 
+const parseQueryValues = (value, separator = ',') => {
+    const rawValues = Array.isArray(value) ? value : [value]
+
+    return rawValues
+        .flatMap(v => String(v || '').split(separator))
+        .map(v => v.trim())
+        .filter(Boolean)
+}
+
+const cargarCodigosDesdeQuery = async (codes) => {
+    const unicos = Array.from(new Set((codes || []).filter(Boolean)))
+
+    for (const code of unicos) {
+        const existe = cotizacion.value.items.some((i) => String(i.codigo || '').trim() === code)
+        if (existe) {
+            continue
+        }
+
+        const index = cotizacion.value.items.length
+        cotizacion.value.items.push({ codigo: code, nombre: '', lateralidad: '', valor: 0, descuento: 0 })
+        await buscarCodigo(code, index)
+    }
+}
+
 onMounted(async () => {
 
     try {
@@ -561,7 +834,17 @@ onMounted(async () => {
             syncEntidadFromQuery()
             syncMedicoFromQuery()
             syncConsultorioFromQuery()
-            await buscarCodigo(route.query.codigo, 0)
+
+            const codigosDesdeQuery = [
+                ...parseQueryValues(route.query.codigos, ','),
+                ...parseQueryValues(route.query.codigo, ','),
+            ]
+            const procedimientosDesdeQuery = parseQueryValues(route.query.procedimientos_formulados, '||')
+            procedimientosFormulados.value = Array.from(new Set(procedimientosDesdeQuery))
+
+            if (codigosDesdeQuery.length) {
+                await cargarCodigosDesdeQuery(codigosDesdeQuery)
+            }
         }
 
     } catch (err) {
@@ -569,6 +852,14 @@ onMounted(async () => {
     } finally {
         extracting.value = false
     }
+})
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutsideDropdowns)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutsideDropdowns)
 })
 
 const isCodificacion = computed(() => {
@@ -654,7 +945,7 @@ const buscarCodigo = async (codigo, index) => {
 
         if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
-            return;
+            return 'not-found';
         }
 
         if (data.value.length === 1) {
@@ -667,8 +958,9 @@ const buscarCodigo = async (codigo, index) => {
                 valor: unico.protarval,
                 concepto: unico.protarcon,
                 connom: unico.connom,
-                descuento: null
+                descuento: 0
             });
+            return 'single';
         } else {
             // ✅ Agrupar por protartar
             const agrupado = data.value.reduce((acc, item) => {
@@ -697,10 +989,12 @@ const buscarCodigo = async (codigo, index) => {
             resultadosCodigo.value = Object.values(agrupado);
             itemSeleccionadoIndex.value = index;
             showModal.value = true;
+            return 'multiple';
         }
     } catch (err) {
         pushNotification('error', 'Código no encontrado', 'Error');
         console.error("❌ Error buscando código:", err);
+        return 'error';
     } finally {
         loadingBuscarCodigo.value = false;
     }
@@ -1023,7 +1317,49 @@ watch(
     }
 );
 
+const getApiErrorMessage = (apiError, fallbackMessage) => {
+    const data = apiError?.data || {}
+
+    if (data?.errors && typeof data.errors === 'object') {
+        const firstFieldErrors = Object.values(data.errors).find((v) => Array.isArray(v) && v.length)
+        if (firstFieldErrors) return firstFieldErrors[0]
+    }
+
+    return data?.message || apiError?.message || fallbackMessage
+}
+
+const validarAntesDeGuardar = () => {
+    if (!cotizacion.value.origen) return 'Debes seleccionar el origen.'
+    if (!cotizacion.value.tipo_gestion) return 'Debes seleccionar el tipo de gestión.'
+    if (!cotizacion.value.medico_id) return 'Debes seleccionar un médico.'
+    if (!cotizacion.value.consultorio_id) return 'Debes seleccionar un consultorio.'
+    if (!paciente.value.entidad_id) return 'Debes seleccionar una entidad.'
+
+    if (!cotizacion.value.items?.length) return 'Debes agregar al menos un procedimiento.'
+
+    if (!paciente.value.id) {
+        if (!paciente.value.tipo_identificacion) return 'El tipo de identificación del paciente es obligatorio.'
+        if (!paciente.value.numero_identificacion) return 'El número de identificación del paciente es obligatorio.'
+        if (!paciente.value.nombres) return 'El nombre del paciente es obligatorio.'
+        if (!paciente.value.apellidos) return 'Los apellidos del paciente son obligatorios.'
+    }
+
+    if (isCodificacion.value) {
+        if (!codificacion.value.autorizacion) return 'El número de autorización es obligatorio para codificación.'
+        if (!codificacion.value.fechaVigencia) return 'La fecha de vigencia es obligatoria para codificación.'
+    }
+
+    return null
+}
+
 const guardarCotizacion = async () => {
+    cerrarDropdowns()
+    const errorValidacion = validarAntesDeGuardar()
+    if (errorValidacion) {
+        pushNotification('error', errorValidacion, 'Validación')
+        return
+    }
+
     loading.value = true;
     try {
         let payload = {
@@ -1040,7 +1376,7 @@ const guardarCotizacion = async () => {
                 nombre: item.nombre,
                 lateralidad: item.lateralidad,
                 valor: Number(item.valor_con_descuento || item.valor),
-                descuento: item.descuento,
+                descuento: Number(item.descuento ?? 0),
                 concepto: item.concepto ?? '',
                 cantidad: item.cantidad ?? 1
             })),
@@ -1089,43 +1425,46 @@ const guardarCotizacion = async () => {
                     lentes: Number(codificacion.value.lentes),
                     pre_anestesia: Number(codificacion.value.preAnestesia),
                     otros: Number(codificacion.value.otros),
-                    fecha_vigencia: codificacion.value.fechaVigencia
+                    fecha_vigencia: codificacion.value.fechaVigencia,
+                    fecha_autorizacion: codificacion.value.fechaAutorizacion,
+                    insumos: Number(totalInsumos.value)
                 }
             };
         }
 
-        // const { data, status, error, refresh } = await useSanctumFetch('/api/cotizaciones', {
-        //     method: 'POST',
-        //     body: payload,
-        // });
-        const result = {};
+        let result;
+        if (props.mode === 'edit') {
+            result = await update(route.params.id, payload)
+        } else {
+            result = await create(payload)
+        }
+
+        const apiError = result?.error?.value
+        if (apiError) {
+            pushNotification('error', getApiErrorMessage(apiError, 'Error al guardar cotización.'), 'Error')
+            return
+        }
+
+        const apiData = result?.data?.value
+        if (!apiData?.success) {
+            pushNotification('error', apiData?.message || 'Error al guardar cotización, valida los datos.', 'Error')
+            return
+        }
 
         if (props.mode === 'edit') {
-            result.value = await update(route.params.id, payload)
-            console.log("Editar cotización~ result:", result.value.data.value.success)
-            if (result.value.data.value.success) {
-                pushNotification('success', `Cotización editada con código:\n${result.value.data.value.codigo}`, 'Éxito');
-            } else {
-                pushNotification('error', 'Error al editar cotización, validar datos', 'Error');
-            }
+            pushNotification('success', `Cotización editada con código:\n${apiData.codigo}`, 'Éxito');
         } else {
-            result.value = await create(payload)
-            console.log(" Crear cotización ~ result:", result.value.data.value.success)
-            if (result.value?.data?.value?.success) {
-                pushNotification('success', `Cotización creada con código:\n${result.value.data.value.codigo}`, 'Éxito');
-            }else {
-                pushNotification('error', 'Error al crear cotización, validar datos', 'Error');
-            }
+            pushNotification('success', `Cotización creada con código:\n${apiData.codigo}`, 'Éxito');
         }
 
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
         cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
-        codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', preAnestesia: '', otros: '', fechaVigencia: '' };
+        codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '' };
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;
 
-        const createdId = result.value?.data?.value?.id;
+        const createdId = apiData?.id;
         if (createdId) {
             setTimeout(() => {
                 router.push(`/cotizacion/imprimir/${createdId}`);

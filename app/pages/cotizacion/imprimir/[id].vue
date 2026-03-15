@@ -13,18 +13,24 @@ const contentRef = ref(null)
 const loading = ref(true)
 const loadingDescargar = ref(false)
 const loadingImprimir = ref(false)
-const privateContent = ref(false)
+const imprimirParaPaciente = ref(false)
+const incluirValorProcedimiento = ref(false)
 
 // Detectar si viene desde la página de consultas
 const modoConsulta = computed(() => route.query.modo === 'consulta')
 
-// Estado para controlar si mostrar contenido agrupado (usado internamente en modo privado)
-const mostrarAgrupado = computed(() => privateContent.value || modoConsulta.value)
+const esCodificacion = computed(() => cotizacion.value?.tipo_gestion === 'codificación')
+const esCotizacion = computed(() => cotizacion.value?.tipo_gestion === 'cotización')
+const modoPaciente = computed(() => imprimirParaPaciente.value || modoConsulta.value)
+
+const TEXTOS_EXCLUIDOS_CODIFICACION = [
+  'honorarios cirujano'
+]
 
 onMounted(async () => {
   // Si viene desde consultas, activar modo privado automáticamente
   if (modoConsulta.value) {
-    privateContent.value = true
+    imprimirParaPaciente.value = true
   }
 
   try {
@@ -78,6 +84,51 @@ const itemsAgrupados = computed(() => {
   return Array.from(grupos.values());
 });
 
+const procedimientosPaciente = computed(() => {
+  if (!cotizacion.value?.items) return [];
+
+  const gruposFiltrados = new Map();
+  const gruposBase = new Map();
+
+  cotizacion.value.items.forEach(item => {
+    const nombre = `${item.nombre || ''}`.toLowerCase();
+    const connom = `${item.connom || ''}`.toLowerCase();
+    const nombreFinal = item.nombre || item.connom || 'Sin nombre';
+    const lateralidadFinal = item.lateralidad || '-';
+    const key = `${item.codigo || ''}`;
+
+    if (!gruposBase.has(key)) {
+      gruposBase.set(key, {
+        codigo: item.codigo || '-',
+        nombre: nombreFinal,
+        lateralidad: lateralidadFinal
+      });
+    }
+
+    const excluirPorCodificacion = esCodificacion.value && TEXTOS_EXCLUIDOS_CODIFICACION.some((texto) =>
+      nombre.includes(texto) || connom.includes(texto)
+    );
+
+    if (excluirPorCodificacion) {
+      return;
+    }
+
+    if (!gruposFiltrados.has(key)) {
+      gruposFiltrados.set(key, {
+        codigo: item.codigo || '-',
+        nombre: nombreFinal,
+        lateralidad: lateralidadFinal
+      });
+    }
+  });
+
+  if (gruposFiltrados.size > 0) {
+    return Array.from(gruposFiltrados.values());
+  }
+
+  return Array.from(gruposBase.values());
+});
+
 const detallesAgrupados = computed(() => {
   if (!cotizacion.value?.detalles) return { insumos: [], lentes: [] };
 
@@ -123,6 +174,35 @@ const totalCantidadLentes = computed(() => {
   return detallesAgrupados.value.lentes.reduce((sum, item) => sum + item.cantidad, 0);
 });
 
+const toNumber = (value) => Number(value || 0)
+
+const totalBaseCodificacion = computed(() => {
+  if (!esCodificacion.value) return 0
+
+  const codificacion = cotizacion.value?.codificacion || {}
+
+  return (
+    toNumber(codificacion.copago) +
+    toNumber(codificacion.excedente_tope) +
+    toNumber(codificacion.lentes) +
+    toNumber(codificacion.pre_anestesia) +
+    toNumber(codificacion.otros_costos)
+  )
+})
+
+const valorProcedimiento = computed(() => {
+  if (!esCodificacion.value) return 0
+  return toNumber(cotizacion.value?.total)
+})
+
+const totalMostrado = computed(() => {
+  if (!esCodificacion.value) {
+    return toNumber(cotizacion.value?.total)
+  }
+
+  return totalBaseCodificacion.value + (incluirValorProcedimiento.value ? valorProcedimiento.value : 0)
+})
+
 // Agrupar procedimientos por concepto y calcular totales
 const agrupadoPorConcepto = computed(() => {
   if (!cotizacion.value?.items) return [];
@@ -167,8 +247,40 @@ const formatMoney = (num) => {
   }).format(num || 0)
 }
 
-const togglePrivate = () => {
-  privateContent.value = !privateContent.value
+const toggleImprimirPaciente = () => {
+  imprimirParaPaciente.value = !imprimirParaPaciente.value
+}
+
+const mmToPx = (mm) => (mm * 96) / 25.4
+
+const applySinglePageScale = () => {
+  const el = contentRef.value
+  if (!el) return () => {}
+
+  const originalStyles = {
+    transform: el.style.transform,
+    transformOrigin: el.style.transformOrigin,
+    width: el.style.width,
+  }
+
+  // Reservamos espacio para el footer que se dibuja en el PDF.
+  const availableHeightPx = mmToPx(278)
+  const contentHeightPx = el.scrollHeight
+  const scaleByHeight = Math.min(1, availableHeightPx / Math.max(1, contentHeightPx))
+  // Factor de seguridad para evitar que el redondeo de html2canvas/jsPDF cree una página extra.
+  const scale = Math.min(0.92, scaleByHeight * 0.98)
+
+  if (scale < 1) {
+    el.style.transform = `scale(${scale})`
+    el.style.transformOrigin = 'top left'
+    el.style.width = `${100 / scale}%`
+  }
+
+  return () => {
+    el.style.transform = originalStyles.transform
+    el.style.transformOrigin = originalStyles.transformOrigin
+    el.style.width = originalStyles.width
+  }
 }
 
 const imprimirPDF = async () => {
@@ -178,6 +290,8 @@ const imprimirPDF = async () => {
     const html2pdf = (await import('html2pdf.js')).default;
 
     if (contentRef.value && cotizacion.value) {
+      const restoreScale = applySinglePageScale()
+
       const options = {
         margin: [0, 0, 0, 0],
         image: { type: 'png', quality: 1.0 },
@@ -225,6 +339,7 @@ const imprimirPDF = async () => {
           }
         })
         .finally(() => {
+          restoreScale();
           loadingImprimir.value = false;
         });
 
@@ -243,6 +358,7 @@ const descargarPDF = async () => {
     const html2pdf = (await import('html2pdf.js')).default;
 
     if (contentRef.value && cotizacion.value) {
+      const restoreScale = applySinglePageScale()
 
       const options = {
         margin: [0, 0, 0, 0],
@@ -286,12 +402,16 @@ const descargarPDF = async () => {
             pdf.text(pageNumText, pageWidth - rightMargin, y + 3, { align: 'right' });
           }
         })
-        .save();
+        .save()
+        .finally(() => {
+          restoreScale()
+          loadingDescargar.value = false;
+        });
 
     } else {
       console.error("No se encontró la referencia al contenido o los datos de la cotización.");
+      loadingDescargar.value = false;
     }
-    loadingDescargar.value = false;
   }
 }
 </script>
@@ -349,156 +469,215 @@ const descargarPDF = async () => {
         </div>
       </div>
       <hr class="mb-4" />
-      <!-- Procedimientos -->
-      <!-- HANQ, DP, null -->
-      <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
-      <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-        <thead class="bg-[#172983] text-white">
-          <tr>
-            <th class="border px-2 py-2 text-sm">CUPS</th>
-            <th class="border px-2 py-2">Nombre</th>
-            <th class="border px-2 py-2">Lateralidad</th>
-            <th v-if="!modoConsulta" class="border px-2 py-2 text-right">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Modo consulta: mostrar agrupado sin valores -->
-          <tr v-if="modoConsulta" v-for="(item, idx) in itemsAgrupados" :key="`consulta-${idx}`">
-            <td class="border px-2 py-2">{{ item.codigo }}</td>
-            <td class="border px-2 py-2">{{ item.nombre }}</td>
-            <td class="border px-2 py-2">{{ item.lateralidad }}</td>
-          </tr>
-          <!-- Modo privado: mostrar agrupado con valores -->
-          <tr v-else-if="privateContent" v-for="(item, idx) in itemsAgrupados" :key="`privado-${idx}`">
-            <td class="border px-2 py-2">{{ item.codigo }}</td>
-            <td class="border px-2 py-2">{{ item.nombre }}</td>
-            <td class="border px-2 py-2">{{ item.lateralidad }}</td>
-            <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
-          </tr>
-          <!-- Modo normal: mostrar todos los items con valores -->
-          <tr v-else v-for="(item, idx) in cotizacion?.items" :key="`normal-${idx}`">
-            <td class="border px-2 py-2">{{ item.codigo }}</td>
-            <td class="border px-2 py-2">{{ item.nombre }}</td>
-            <td class="border px-2 py-2">{{ item.lateralidad }}</td>
-            <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Agrupado por concepto (mostrar en modo normal y modo consulta) -->
-      <div v-if="!privateContent || modoConsulta">
-        <h2 class="text-base font-bold mb-2">AGRUPADO POR CONCEPTO</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+      <template v-if="esCodificacion && modoPaciente">
+        <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-4">
           <thead class="bg-[#172983] text-white">
             <tr>
-              <th class="border px-2 py-2">Concepto</th>
-              <th class="border px-2 py-2 text-right">Valor Total</th>
+              <th class="border px-2 py-2 text-sm">CUPS</th>
+              <th class="border px-2 py-2">Nombre</th>
+              <th class="border px-2 py-2">Lateralidad</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in agrupadoPorConcepto" :key="c.concepto">
-              <td class="border px-2 py-2">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
-              <td class="border px-2 py-2 text-right">{{ formatMoney(c.total) }}</td>
+            <tr v-for="(item, idx) in procedimientosPaciente" :key="`paciente-codif-${idx}`">
+              <td class="border px-2 py-2">{{ item.codigo }}</td>
+              <td class="border px-2 py-2">{{ item.nombre }}</td>
+              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
             </tr>
           </tbody>
         </table>
-      </div>
-      <div v-if="(modoConsulta || privateContent) && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
-        <!-- Insumos (agregados con valores) -->
-        <template v-if="detallesAgrupados.insumos.length > 0">
-          <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <h2 class="text-base font-bold mb-2">VALORES DE CODIFICACIÓN</h2>
+            <table class="w-full border-collapse border border-gray-400 text-sm">
+              <tbody>
+                <tr>
+                  <td class="border px-2 py-2 font-semibold bg-gray-50">Copago</td>
+                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.copago) }}</td>
+                </tr>
+                <tr>
+                  <td class="border px-2 py-2 font-semibold bg-gray-50">Excedente tope</td>
+                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
+                </tr>
+                <tr>
+                  <td class="border px-2 py-2 font-semibold bg-gray-50">Lente</td>
+                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.lentes) }}</td>
+                </tr>
+                <tr>
+                  <td class="border px-2 py-2 font-semibold bg-gray-50">Preanestesia</td>
+                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
+                </tr>
+                <tr>
+                  <td class="border px-2 py-2 font-semibold bg-gray-50">Otros</td>
+                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2 class="text-base font-bold mb-2">OBSERVACIONES</h2>
+            <div class="border border-gray-400 rounded-sm p-3 min-h-[190px]">
+              <p class="text-sm whitespace-pre-line">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <!-- Procedimientos -->
+        <!-- HANQ, DP, null -->
+        <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+          <thead class="bg-[#172983] text-white">
+            <tr>
+              <th class="border px-2 py-2 text-sm">CUPS</th>
+              <th class="border px-2 py-2">Nombre</th>
+              <th class="border px-2 py-2">Lateralidad</th>
+              <th v-if="!modoConsulta" class="border px-2 py-2 text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Modo consulta: mostrar agrupado sin valores -->
+            <tr v-if="modoConsulta" v-for="(item, idx) in itemsAgrupados" :key="`consulta-${idx}`">
+              <td class="border px-2 py-2">{{ item.codigo }}</td>
+              <td class="border px-2 py-2">{{ item.nombre }}</td>
+              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+            </tr>
+            <!-- Modo privado: mostrar agrupado con valores -->
+            <tr v-else-if="imprimirParaPaciente" v-for="(item, idx) in itemsAgrupados" :key="`privado-${idx}`">
+              <td class="border px-2 py-2">{{ item.codigo }}</td>
+              <td class="border px-2 py-2">{{ item.nombre }}</td>
+              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
+            </tr>
+            <!-- Modo normal: mostrar todos los items con valores -->
+            <tr v-else v-for="(item, idx) in cotizacion?.items" :key="`normal-${idx}`">
+              <td class="border px-2 py-2">{{ item.codigo }}</td>
+              <td class="border px-2 py-2">{{ item.nombre }}</td>
+              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Agrupado por concepto (mostrar en modo normal y modo consulta) -->
+        <div v-if="!imprimirParaPaciente || modoConsulta">
+          <h2 class="text-base font-bold mb-2">AGRUPADO POR CONCEPTO</h2>
           <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
             <thead class="bg-[#172983] text-white">
               <tr>
-                <th class="border px-2 py-2">Descripción</th>
-                <th class="border px-2 py-2 text-center">Cantidad Total</th>
+                <th class="border px-2 py-2">Concepto</th>
                 <th class="border px-2 py-2 text-right">Valor Total</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
-                <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
-                <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
-                  {{ formatMoney(totalInsumos) }}
-                </td>
+              <tr v-for="c in agrupadoPorConcepto" :key="c.concepto">
+                <td class="border px-2 py-2">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
+                <td class="border px-2 py-2 text-right">{{ formatMoney(c.total) }}</td>
               </tr>
             </tbody>
           </table>
-        </template>
+        </div>
+        <div v-if="(modoConsulta || imprimirParaPaciente) && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+          <!-- Insumos (agregados con valores) -->
+          <template v-if="detallesAgrupados.insumos.length > 0">
+            <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+              <thead class="bg-[#172983] text-white">
+                <tr>
+                  <th class="border px-2 py-2">Descripción</th>
+                  <th class="border px-2 py-2 text-center">Cantidad Total</th>
+                  <th class="border px-2 py-2 text-right">Valor Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
+                  <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
+                  <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                    {{ formatMoney(totalInsumos) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
 
-        <!-- Lentes (agregados con valores) -->
-        <template v-if="detallesAgrupados.lentes.length > 0">
-          <h2 class="text-base font-bold mb-2">LENTES</h2>
-          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-            <thead class="bg-[#172983] text-white">
-              <tr>
-                <th class="border px-2 py-2">Descripción</th>
-                <th class="border px-2 py-2 text-center">Cantidad Total</th>
-                <th class="border px-2 py-2 text-right">Valor Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
-                <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
-                <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
-                  {{ formatMoney(totalLentes) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </template>
-      </div>
+          <!-- Lentes (agregados con valores) -->
+          <template v-if="detallesAgrupados.lentes.length > 0">
+            <h2 class="text-base font-bold mb-2">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+              <thead class="bg-[#172983] text-white">
+                <tr>
+                  <th class="border px-2 py-2">Descripción</th>
+                  <th class="border px-2 py-2 text-center">Cantidad Total</th>
+                  <th class="border px-2 py-2 text-right">Valor Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
+                  <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
+                  <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                    {{ formatMoney(totalLentes) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
 
-      <!-- Insumos y Lentes detallados (modo normal) -->
-      <div v-if="!privateContent && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
-        <template v-if="detallesAgrupados.insumos.length > 0">
-          <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-            <thead class="bg-[#172983] text-white">
-              <tr>
-                <th class="border px-2 py-2">Código</th>
-                <th class="border px-2 py-2">Nombre</th>
-                <th class="border px-2 py-2">Tipo</th>
-                <th class="border px-2 py-2 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="detalle in detallesAgrupados.insumos" :key="detalle.id">
-                <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                <td class="border border-gray-400 px-2 py-2">(Insumo)</td>
-                <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </template>
+        <!-- Insumos y Lentes detallados (modo normal) -->
+        <div v-if="!imprimirParaPaciente && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+          <template v-if="detallesAgrupados.insumos.length > 0">
+            <h2 class="text-base font-bold mb-2">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+              <thead class="bg-[#172983] text-white">
+                <tr>
+                  <th class="border px-2 py-2">Código</th>
+                  <th class="border px-2 py-2">Nombre</th>
+                  <th class="border px-2 py-2">Tipo</th>
+                  <th class="border px-2 py-2 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="detalle in detallesAgrupados.insumos" :key="detalle.id">
+                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-2">(Insumo)</td>
+                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
 
-        <template v-if="detallesAgrupados.lentes.length > 0">
-          <h2 class="text-base font-bold mb-2">LENTES</h2>
-          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-            <thead class="bg-[#172983] text-white">
-              <tr>
-                <th class="border px-2 py-2">Código</th>
-                <th class="border px-2 py-2">Nombre</th>
-                <th class="border px-2 py-2">Tipo</th>
-                <th class="border px-2 py-2 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="detalle in detallesAgrupados.lentes" :key="detalle.id">
-                <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                <td class="border border-gray-400 px-2 py-2">(Lente)</td>
-                <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </template>
-      </div>
+          <template v-if="detallesAgrupados.lentes.length > 0">
+            <h2 class="text-base font-bold mb-2">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+              <thead class="bg-[#172983] text-white">
+                <tr>
+                  <th class="border px-2 py-2">Código</th>
+                  <th class="border px-2 py-2">Nombre</th>
+                  <th class="border px-2 py-2">Tipo</th>
+                  <th class="border px-2 py-2 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="detalle in detallesAgrupados.lentes" :key="detalle.id">
+                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-2">(Lente)</td>
+                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
+      </template>
       <p class="text-right font-bold mb-4">
-        VALOR TOTAL DEL PROCEDIMIENTO: {{ formatMoney(cotizacion?.total) }}
+        {{ esCodificacion ? 'VALOR TOTAL:' : 'VALOR TOTAL DEL PROCEDIMIENTO:' }} {{ formatMoney(totalMostrado) }}
       </p>
 
       <!-- Costos desglosados -->
@@ -524,7 +703,7 @@ const descargarPDF = async () => {
       <p>{{ cotizacion?.inclusiones || 'Ninguna' }}</p>
     </div> -->
       <!-- Pie de página -->
-      <div class="flex flex-col items-start leading-none mt-20 text-sm text-gray-700">
+      <div class="flex flex-col items-start leading-none mt-10 text-sm text-gray-700">
         <p class="mb-1 font-semibold text-xl">{{ cotizacion?.asesor?.name }}</p>
         <p>Asesor barra SAI</p>
         <p>Email: {{ cotizacion?.asesor?.email }}</p>
@@ -532,12 +711,30 @@ const descargarPDF = async () => {
     </div>
 
     <div class="py-6 px-6 bg-white text-black max-w-5xl mx-auto">
-      <div class="inline-flex items-center">
-        <label class="relative flex items-center rounded-full p-3" :class="{'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta}" for="login" data-ripple-dark="true">
-          <input id="login" type="checkbox"
+      <div v-if="esCodificacion" class="inline-flex items-center gap-3">
+        <button class="px-4 py-2 rounded text-white" :class="modoPaciente ? 'bg-[#162983]' : 'bg-gray-500'"
+          @click="toggleImprimirPaciente" :disabled="modoConsulta">
+          {{ modoPaciente ? 'Imprimir para paciente: Activo' : 'Imprimir para paciente' }}
+        </button>
+        <button
+          class="px-4 py-2 rounded text-white"
+          :class="incluirValorProcedimiento ? 'bg-emerald-600' : 'bg-slate-500'"
+          @click="incluirValorProcedimiento = !incluirValorProcedimiento"
+        >
+          {{ incluirValorProcedimiento ? 'Incluye valor del procedimiento' : 'No incluye valor del procedimiento' }}
+        </button>
+        <span class="text-sm" :class="modoConsulta ? 'text-blue-600' : 'text-gray-700'">
+          <template v-if="modoConsulta">Modo consulta activado automáticamente</template>
+          <template v-else>Si está activo, se muestra versión resumida para paciente</template>
+        </span>
+      </div>
+
+      <div v-else-if="esCotizacion" class="inline-flex items-center">
+        <label class="relative flex items-center rounded-full p-3" :class="{ 'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta }" for="imprimir-paciente" data-ripple-dark="true">
+          <input id="imprimir-paciente" type="checkbox"
             class="before:content[''] peer relative h-5 w-5 appearance-none rounded-md border border-blue-400 transition-all before:absolute before:top-2/4 before:left-2/4 before:block before:h-12 before:w-12 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-blue-gray-500 before:opacity-0 before:transition-opacity checked:border-blue-500 checked:bg-blue-500 checked:before:bg-blue-500 hover:before:opacity-10 disabled:cursor-not-allowed disabled:opacity-50"
-            :class="{'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta}"
-            v-model="privateContent" @change="togglePrivate" :disabled="modoConsulta" />
+            :class="{ 'cursor-pointer': !modoConsulta, 'cursor-not-allowed': modoConsulta }"
+            v-model="imprimirParaPaciente" :disabled="modoConsulta" />
           <div
             class="pointer-events-none absolute top-2/4 left-2/4 -translate-y-2/4 -translate-x-2/4 text-white opacity-0 transition-opacity peer-checked:opacity-100">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"
@@ -548,9 +745,8 @@ const descargarPDF = async () => {
             </svg>
           </div>
         </label>
-        <label class="mt-px select-none font-light" :class="{'cursor-pointer text-gray-700': !modoConsulta, 'cursor-not-allowed text-gray-400': modoConsulta}" for="login">
-          Imprimir información de la <span class="font-bold ">{{ cotizacion?.tipo_gestion == 'cotización' ? 'cotización'
-            : 'codificación' }} </span> para el paciente
+        <label class="mt-px select-none font-light" :class="{ 'cursor-pointer text-gray-700': !modoConsulta, 'cursor-not-allowed text-gray-400': modoConsulta }" for="imprimir-paciente">
+          Imprimir información de la <span class="font-bold">cotización</span> para el paciente
           <span v-if="modoConsulta" class="text-blue-600 text-xs block">(Modo consulta activado automáticamente)</span>
         </label>
       </div>
