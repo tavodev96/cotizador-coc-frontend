@@ -235,6 +235,14 @@
                             <span>Buscando código...</span>
                         </div>
                     </div>
+
+                    <div v-if="procedimientosFormulados.length" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p class="text-sm font-semibold text-amber-800">Procedimientos formulados desde ordenamiento</p>
+                        <ul v-if="procedimientosFormulados.length" class="mt-2 list-disc pl-5 text-sm text-amber-900 space-y-1">
+                            <li v-for="(proc, idx) in procedimientosFormulados" :key="`formulado-${idx}`">{{ proc }}</li>
+                        </ul>
+                    </div>
+
                     <div v-for="(item, index) in cotizacion.items" :key="index"
                         class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
 
@@ -564,6 +572,7 @@ const itemSeleccionadoIndex = ref(null)
 const gruposAbiertos = ref(new Set());
 const codigoSeleccionado = ref([]);
 const seleccionarTodo = ref({});
+const procedimientosFormulados = ref([])
 const loading = ref(false);
 const isconsultorioDisabled = ref(false);
 const isdoctorDisabled = ref(false);
@@ -780,6 +789,30 @@ watch(resultadosCodigo, () => {
     paginaResultados.value = 1;
 });
 
+const parseQueryValues = (value, separator = ',') => {
+    const rawValues = Array.isArray(value) ? value : [value]
+
+    return rawValues
+        .flatMap(v => String(v || '').split(separator))
+        .map(v => v.trim())
+        .filter(Boolean)
+}
+
+const cargarCodigosDesdeQuery = async (codes) => {
+    const unicos = Array.from(new Set((codes || []).filter(Boolean)))
+
+    for (const code of unicos) {
+        const existe = cotizacion.value.items.some((i) => String(i.codigo || '').trim() === code)
+        if (existe) {
+            continue
+        }
+
+        const index = cotizacion.value.items.length
+        cotizacion.value.items.push({ codigo: code, nombre: '', lateralidad: '', valor: 0, descuento: 0 })
+        await buscarCodigo(code, index)
+    }
+}
+
 onMounted(async () => {
 
     try {
@@ -801,7 +834,17 @@ onMounted(async () => {
             syncEntidadFromQuery()
             syncMedicoFromQuery()
             syncConsultorioFromQuery()
-            await buscarCodigo(route.query.codigo, 0)
+
+            const codigosDesdeQuery = [
+                ...parseQueryValues(route.query.codigos, ','),
+                ...parseQueryValues(route.query.codigo, ','),
+            ]
+            const procedimientosDesdeQuery = parseQueryValues(route.query.procedimientos_formulados, '||')
+            procedimientosFormulados.value = Array.from(new Set(procedimientosDesdeQuery))
+
+            if (codigosDesdeQuery.length) {
+                await cargarCodigosDesdeQuery(codigosDesdeQuery)
+            }
         }
 
     } catch (err) {
@@ -902,7 +945,7 @@ const buscarCodigo = async (codigo, index) => {
 
         if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
-            return;
+            return 'not-found';
         }
 
         if (data.value.length === 1) {
@@ -915,8 +958,9 @@ const buscarCodigo = async (codigo, index) => {
                 valor: unico.protarval,
                 concepto: unico.protarcon,
                 connom: unico.connom,
-                descuento: null
+                descuento: 0
             });
+            return 'single';
         } else {
             // ✅ Agrupar por protartar
             const agrupado = data.value.reduce((acc, item) => {
@@ -945,10 +989,12 @@ const buscarCodigo = async (codigo, index) => {
             resultadosCodigo.value = Object.values(agrupado);
             itemSeleccionadoIndex.value = index;
             showModal.value = true;
+            return 'multiple';
         }
     } catch (err) {
         pushNotification('error', 'Código no encontrado', 'Error');
         console.error("❌ Error buscando código:", err);
+        return 'error';
     } finally {
         loadingBuscarCodigo.value = false;
     }
@@ -1271,8 +1317,49 @@ watch(
     }
 );
 
+const getApiErrorMessage = (apiError, fallbackMessage) => {
+    const data = apiError?.data || {}
+
+    if (data?.errors && typeof data.errors === 'object') {
+        const firstFieldErrors = Object.values(data.errors).find((v) => Array.isArray(v) && v.length)
+        if (firstFieldErrors) return firstFieldErrors[0]
+    }
+
+    return data?.message || apiError?.message || fallbackMessage
+}
+
+const validarAntesDeGuardar = () => {
+    if (!cotizacion.value.origen) return 'Debes seleccionar el origen.'
+    if (!cotizacion.value.tipo_gestion) return 'Debes seleccionar el tipo de gestión.'
+    if (!cotizacion.value.medico_id) return 'Debes seleccionar un médico.'
+    if (!cotizacion.value.consultorio_id) return 'Debes seleccionar un consultorio.'
+    if (!paciente.value.entidad_id) return 'Debes seleccionar una entidad.'
+
+    if (!cotizacion.value.items?.length) return 'Debes agregar al menos un procedimiento.'
+
+    if (!paciente.value.id) {
+        if (!paciente.value.tipo_identificacion) return 'El tipo de identificación del paciente es obligatorio.'
+        if (!paciente.value.numero_identificacion) return 'El número de identificación del paciente es obligatorio.'
+        if (!paciente.value.nombres) return 'El nombre del paciente es obligatorio.'
+        if (!paciente.value.apellidos) return 'Los apellidos del paciente son obligatorios.'
+    }
+
+    if (isCodificacion.value) {
+        if (!codificacion.value.autorizacion) return 'El número de autorización es obligatorio para codificación.'
+        if (!codificacion.value.fechaVigencia) return 'La fecha de vigencia es obligatoria para codificación.'
+    }
+
+    return null
+}
+
 const guardarCotizacion = async () => {
     cerrarDropdowns()
+    const errorValidacion = validarAntesDeGuardar()
+    if (errorValidacion) {
+        pushNotification('error', errorValidacion, 'Validación')
+        return
+    }
+
     loading.value = true;
     try {
         let payload = {
@@ -1289,7 +1376,7 @@ const guardarCotizacion = async () => {
                 nombre: item.nombre,
                 lateralidad: item.lateralidad,
                 valor: Number(item.valor_con_descuento || item.valor),
-                descuento: item.descuento,
+                descuento: Number(item.descuento ?? 0),
                 concepto: item.concepto ?? '',
                 cantidad: item.cantidad ?? 1
             })),
@@ -1345,24 +1432,29 @@ const guardarCotizacion = async () => {
             };
         }
 
-        const result = {};
+        let result;
+        if (props.mode === 'edit') {
+            result = await update(route.params.id, payload)
+        } else {
+            result = await create(payload)
+        }
+
+        const apiError = result?.error?.value
+        if (apiError) {
+            pushNotification('error', getApiErrorMessage(apiError, 'Error al guardar cotización.'), 'Error')
+            return
+        }
+
+        const apiData = result?.data?.value
+        if (!apiData?.success) {
+            pushNotification('error', apiData?.message || 'Error al guardar cotización, valida los datos.', 'Error')
+            return
+        }
 
         if (props.mode === 'edit') {
-            result.value = await update(route.params.id, payload)
-            console.log("Editar cotización~ result:", result.value.data.value.success)
-            if (result.value.data.value.success) {
-                pushNotification('success', `Cotización editada con código:\n${result.value.data.value.codigo}`, 'Éxito');
-            } else {
-                pushNotification('error', 'Error al editar cotización, validar datos', 'Error');
-            }
+            pushNotification('success', `Cotización editada con código:\n${apiData.codigo}`, 'Éxito');
         } else {
-            result.value = await create(payload)
-            console.log(" Crear cotización ~ result:", result.value.data.value.success)
-            if (result.value?.data?.value?.success) {
-                pushNotification('success', `Cotización creada con código:\n${result.value.data.value.codigo}`, 'Éxito');
-            }else {
-                pushNotification('error', 'Error al crear cotización, validar datos', 'Error');
-            }
+            pushNotification('success', `Cotización creada con código:\n${apiData.codigo}`, 'Éxito');
         }
 
         // Reset
@@ -1372,7 +1464,7 @@ const guardarCotizacion = async () => {
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;
 
-        const createdId = result.value?.data?.value?.id;
+        const createdId = apiData?.id;
         if (createdId) {
             setTimeout(() => {
                 router.push(`/cotizacion/imprimir/${createdId}`);

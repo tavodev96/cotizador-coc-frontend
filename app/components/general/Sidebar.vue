@@ -39,6 +39,7 @@
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Configuración</p>
       <SidebarLink label="Usuarios" link="/configuracion/usuarios" />
       <SidebarLink label="Roles y permisos" link="/configuracion/roles-permisos" />
+      <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
     </div>
 

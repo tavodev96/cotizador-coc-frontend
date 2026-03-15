@@ -251,6 +251,38 @@ const toggleImprimirPaciente = () => {
   imprimirParaPaciente.value = !imprimirParaPaciente.value
 }
 
+const mmToPx = (mm) => (mm * 96) / 25.4
+
+const applySinglePageScale = () => {
+  const el = contentRef.value
+  if (!el) return () => {}
+
+  const originalStyles = {
+    transform: el.style.transform,
+    transformOrigin: el.style.transformOrigin,
+    width: el.style.width,
+  }
+
+  // Reservamos espacio para el footer que se dibuja en el PDF.
+  const availableHeightPx = mmToPx(278)
+  const contentHeightPx = el.scrollHeight
+  const scaleByHeight = Math.min(1, availableHeightPx / Math.max(1, contentHeightPx))
+  // Factor de seguridad para evitar que el redondeo de html2canvas/jsPDF cree una página extra.
+  const scale = Math.min(0.92, scaleByHeight * 0.98)
+
+  if (scale < 1) {
+    el.style.transform = `scale(${scale})`
+    el.style.transformOrigin = 'top left'
+    el.style.width = `${100 / scale}%`
+  }
+
+  return () => {
+    el.style.transform = originalStyles.transform
+    el.style.transformOrigin = originalStyles.transformOrigin
+    el.style.width = originalStyles.width
+  }
+}
+
 const imprimirPDF = async () => {
   if (process.client) {
     loadingImprimir.value = true;
@@ -258,6 +290,8 @@ const imprimirPDF = async () => {
     const html2pdf = (await import('html2pdf.js')).default;
 
     if (contentRef.value && cotizacion.value) {
+      const restoreScale = applySinglePageScale()
+
       const options = {
         margin: [0, 0, 0, 0],
         image: { type: 'png', quality: 1.0 },
@@ -305,6 +339,7 @@ const imprimirPDF = async () => {
           }
         })
         .finally(() => {
+          restoreScale();
           loadingImprimir.value = false;
         });
 
@@ -323,6 +358,7 @@ const descargarPDF = async () => {
     const html2pdf = (await import('html2pdf.js')).default;
 
     if (contentRef.value && cotizacion.value) {
+      const restoreScale = applySinglePageScale()
 
       const options = {
         margin: [0, 0, 0, 0],
@@ -366,12 +402,16 @@ const descargarPDF = async () => {
             pdf.text(pageNumText, pageWidth - rightMargin, y + 3, { align: 'right' });
           }
         })
-        .save();
+        .save()
+        .finally(() => {
+          restoreScale()
+          loadingDescargar.value = false;
+        });
 
     } else {
       console.error("No se encontró la referencia al contenido o los datos de la cotización.");
+      loadingDescargar.value = false;
     }
-    loadingDescargar.value = false;
   }
 }
 </script>
@@ -431,7 +471,7 @@ const descargarPDF = async () => {
       <hr class="mb-4" />
       <template v-if="esCodificacion && modoPaciente">
         <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
+        <table class="w-full border-collapse border border-gray-400 text-sm mb-4">
           <thead class="bg-[#172983] text-white">
             <tr>
               <th class="border px-2 py-2 text-sm">CUPS</th>
@@ -663,7 +703,7 @@ const descargarPDF = async () => {
       <p>{{ cotizacion?.inclusiones || 'Ninguna' }}</p>
     </div> -->
       <!-- Pie de página -->
-      <div class="flex flex-col items-start leading-none mt-20 text-sm text-gray-700">
+      <div class="flex flex-col items-start leading-none mt-10 text-sm text-gray-700">
         <p class="mb-1 font-semibold text-xl">{{ cotizacion?.asesor?.name }}</p>
         <p>Asesor barra SAI</p>
         <p>Email: {{ cotizacion?.asesor?.email }}</p>

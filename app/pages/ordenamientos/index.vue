@@ -20,11 +20,49 @@ const page = ref(1)
 const perPage = 10
 const loading = ref(false)
 
-const totalRegistros = computed(() => data.value.length)
-const totalPages = computed(() => Math.ceil(data.value.length / perPage))
+const groupedData = computed(() => {
+    const grupos = new Map()
+
+    for (const row of data.value || []) {
+        const key = String(row?.documento || '').trim()
+        if (!key) continue
+
+        if (!grupos.has(key)) {
+            grupos.set(key, {
+                id: key,
+                documento: row.documento,
+                entidad_cod: row.entidad_cod,
+                entidad_nom: row.entidad_nom,
+                fecha: row.fecha,
+                consultorio: row.consultorio,
+                medico: row.medico,
+                id_medico: row.id_medico,
+                ids_ordenamiento: [],
+                procedimientos: [],
+                codigos: [],
+            })
+        }
+
+        const group = grupos.get(key)
+        if (row?.id_ordenamiento && !group.ids_ordenamiento.includes(String(row.id_ordenamiento))) {
+            group.ids_ordenamiento.push(String(row.id_ordenamiento))
+        }
+        if (row?.procedimiento && !group.procedimientos.includes(row.procedimiento)) {
+            group.procedimientos.push(row.procedimiento)
+        }
+        if (row?.CUP && !group.codigos.includes(String(row.CUP))) {
+            group.codigos.push(String(row.CUP))
+        }
+    }
+
+    return Array.from(grupos.values())
+})
+
+const totalRegistros = computed(() => groupedData.value.length)
+const totalPages = computed(() => Math.ceil(groupedData.value.length / perPage))
 
 const paginatedData = computed(() =>
-    data.value.slice((page.value - 1) * perPage, page.value * perPage)
+    groupedData.value.slice((page.value - 1) * perPage, page.value * perPage)
 )
 
 const fetchData = async () => {
@@ -55,6 +93,9 @@ const fetchData = async () => {
 }
 
 const generarCotizacion = (item) => {
+    const codigos = (item.codigos || []).filter(Boolean)
+    const procedimientos = (item.procedimientos || []).filter(Boolean)
+
     router.push({
         name: 'gestion-cotizacion',
         query: {
@@ -65,9 +106,11 @@ const generarCotizacion = (item) => {
             medico: item.medico,
             medico_id: item.id_medico,
             consultorio: item.consultorio,
-            procedimiento: item.procedimiento,
-            id_ordenamiento: item.id_ordenamiento,
-            codigo: item.CUP
+            procedimiento: procedimientos[0] || '',
+            id_ordenamiento: (item.ids_ordenamiento || []).join(','),
+            codigo: codigos[0] || '',
+            codigos: codigos.join(','),
+            procedimientos_formulados: procedimientos.join('||')
         }
     })
 }
@@ -221,15 +264,33 @@ const pushNotification = (type, message, title) => {
                     <tbody>
                         <tr v-for="item in paginatedData" :key="item.id">
                             <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.documento }}</td>
-                            <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.id_ordenamiento }}</td>
+                            <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                                <div class="space-y-1">
+                                    <p class="font-medium">{{ item.ids_ordenamiento[0] || 'N/A' }}</p>
+                                    <p v-if="item.ids_ordenamiento.length > 1" class="text-xs text-slate-500">+{{ item.ids_ordenamiento.length - 1 }} más</p>
+                                </div>
+                            </td>
                             <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.entidad_nom }}</td>
                             <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.fecha }}</td>
-                            <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.procedimiento }}</td>
+                            <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                                <ul class="space-y-1">
+                                    <li v-for="(proc, idx) in item.procedimientos" :key="`${item.id}-proc-${idx}`" class="leading-tight">
+                                        {{ proc }}
+                                    </li>
+                                </ul>
+                            </td>
                             <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.consultorio }}</td>
                             <td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">{{ item.medico }}</td>
                             <td class="border border-slate-200 px-3 py-2">
-                                <button @click="generarCotizacion(item)" class="inline-flex items-center h-8 px-3 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-sm font-medium">
-                                    Generar cotización
+                                <button
+                                    @click="generarCotizacion(item)"
+                                    title="Generar cotización"
+                                    aria-label="Generar cotización"
+                                    class="inline-flex items-center justify-center h-9 w-9 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14" />
+                                    </svg>
                                 </button>
                             </td>
                         </tr>

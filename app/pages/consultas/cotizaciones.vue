@@ -3,7 +3,7 @@
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
             <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Consultar cotizaciones</h1>
             <p class="text-sm text-slate-600">
-                Busca con número de historia del paciente en
+                Busca con número de identificación del paciente en
                 <span class="uppercase text-indigo-700 font-semibold">Servinte</span>.
             </p>
 
@@ -11,7 +11,7 @@
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Número de historia"
+                    placeholder="Número de identificación del paciente"
                     class="w-full md:max-w-sm h-11 border border-slate-300 rounded-lg px-3 bg-white"
                     @keyup.enter="fetchCotizaciones"
                     :disabled="cargando"
