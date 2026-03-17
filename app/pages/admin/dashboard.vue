@@ -193,16 +193,6 @@
           </div>
         </div>
       </div>
-
-      <div
-        v-if="!roleDashboard.notice && !roleDashboard.cards.length && !roleDashboard.blocks.length"
-        class="bg-white border border-slate-200 rounded-2xl p-6 text-slate-700"
-      >
-        <h2 class="text-lg font-semibold text-slate-900">Sin panel disponible</h2>
-        <p class="text-sm mt-2">
-          No hay tarjetas o bloques configurados para este rol en el periodo seleccionado.
-        </p>
-      </div>
     </template>
   </section>
 </template>
@@ -231,15 +221,7 @@ const periodos = [
 
 const periodoSeleccionado = ref('30d')
 
-const esAdmin = computed(() => {
-  const rol = String(roleDashboard.value?.rol || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-
-  return rol === 'administrador' || rol === 'admin' || rol === 'superadmin'
-})
+const esAdmin = computed(() => roleDashboard.value.rol === 'administrador')
 
 const totalCotizacionesAdmin = computed(() => {
   return Number(metricasDashboard.value?.conversion?.total_cotizaciones ?? 0)
