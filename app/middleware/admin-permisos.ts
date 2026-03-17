@@ -6,8 +6,11 @@ export default defineNuxtRouteMiddleware(async () => {
     return navigateTo('/login')
   }
 
+  const permissions = user.value.permissions || []
+  const canAccess = permissions.includes('configuracion.permisos') || permissions.includes('configuracion.modulos')
+
   // Verificar si el usuario tiene el permiso necesario
-  if (!user.value.permissions || !user.value.permissions.includes('configuracion.permisos')) {
+  if (!canAccess) {
     return navigateTo('/403')
   }
 })

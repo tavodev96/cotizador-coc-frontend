@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+definePageMeta({
+  middleware: ['sanctum:auth']
+})
+
+const { refreshUserPermissions, hasPermission, hasRole } = useUserPermissions()
+
 const {
   cirugias,
   fetchProgramacion,
@@ -64,6 +70,14 @@ const aplicarFiltros = async () => {
 }
 
 onMounted(async () => {
+  await refreshUserPermissions()
+
+  const canAccess = hasPermission('programacion.procedimientos.ver') || hasRole('superadmin')
+  if (!canAccess) {
+    await navigateTo('/403')
+    return
+  }
+
   await aplicarFiltros()
 })
 </script>

@@ -17,6 +17,7 @@ const mostrarModalHistorico = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
+const savingPriority = ref(false)
 
 const intendedEstado = ref(null)
 const mostrarModalComentario = ref(false)
@@ -52,6 +53,38 @@ const fetchDetalle = async () => {
 const fetchEstados = async () => {
   const { data } = await useSanctumFetch('/api/estados/cotizacion', { method: 'GET' })
   estadosAdministrativos.value = data.value.sort((a, b) => a.orden - b.orden);
+}
+
+const togglePrioridad = async () => {
+  if (!cotizacion.value || savingPriority.value) return
+
+  savingPriority.value = true
+
+  try {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/prioridad`, {
+      method: 'PUT',
+      body: {
+        es_prioritaria: !cotizacion.value.es_prioritaria,
+      }
+    })
+
+    if (error.value || !data.value?.success) {
+      pushNotification('error', 'No se pudo actualizar la prioridad', 'Error')
+      return
+    }
+
+    cotizacion.value = {
+      ...cotizacion.value,
+      es_prioritaria: data.value.cotizacion?.es_prioritaria ?? !cotizacion.value.es_prioritaria,
+    }
+
+    pushNotification('success', data.value?.message || 'Prioridad actualizada correctamente', 'Exito')
+  } catch (error) {
+    console.error('Error al actualizar prioridad:', error)
+    pushNotification('error', 'No se pudo actualizar la prioridad', 'Error')
+  } finally {
+    savingPriority.value = false
+  }
 }
 
 
@@ -314,6 +347,10 @@ const totalConDetalles = computed(() => {
         <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
         <p class="text-slate-700"><span class="font-bold">Estado:</span> <span
             class="bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.estado.nombre }}</span></p>
+        <p v-if="cotizacion?.es_prioritaria" class="text-slate-700">
+          <span class="font-bold">Prioridad:</span>
+          <span class="bg-rose-100 text-rose-700 rounded-full px-2.5 py-1 text-sm font-semibold">Prioritaria</span>
+        </p>
         <p v-if="cotizacion?.fecha_programada" class="text-slate-700">
           <span class="font-bold">Fecha programada:</span>
           <span class="bg-amber-100 text-amber-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.fecha_programada }}</span>
@@ -353,7 +390,15 @@ const totalConDetalles = computed(() => {
 
         <div class="flex justify-between items-center gap-2 mt-4">
           <h3 class="font-semibold">Historial de Estados:</h3>
-          <div class="flex justify-end">
+          <div class="flex justify-end gap-2">
+            <button
+              @click="togglePrioridad"
+              :disabled="savingPriority"
+              class="px-4 py-2 rounded-lg transition text-white"
+              :class="cotizacion?.es_prioritaria ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'"
+            >
+              {{ savingPriority ? 'Guardando...' : (cotizacion?.es_prioritaria ? 'Quitar prioridad' : 'Marcar como prioritaria') }}
+            </button>
             <button @click="mostrarModalHistorico = true"
               class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition">
               Ver histórico

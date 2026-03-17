@@ -19,11 +19,11 @@
       <SidebarLink label="Cotizaciones" link="/consultas/cotizaciones" />
     </div>
 
-    <!-- Cirugía - Visible si tiene permisos de consulta/seguimiento -->
+    <!-- Cirugía - Visible según permisos de programación/cirugía -->
     <div v-if="canAccessCirugia" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Cirugía</p>
-      <SidebarLink label="Programación" link="/programacion" />
-      <SidebarLink label="Procedimientos" link="/programacion/procedimientos" />
+      <SidebarLink v-if="canAccessProgramacion" label="Programación" link="/programacion" />
+      <SidebarLink v-if="canAccessProcedimientosCirugia" label="Procedimientos" link="/programacion/procedimientos" />
     </div>
 
     <!-- Tarifas - Visible si tiene permisos de tarifas -->
@@ -34,11 +34,11 @@
       <SidebarLink label="Lentes" link="/tarifas/lentes" />
     </div>
 
-    <!-- Configuración - Si tiene permiso de gestionar configuracion -->
-    <div v-if="hasPermission('configuracion.permisos')" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
+    <!-- Configuración - Visible si tiene permisos de configuración -->
+    <div v-if="canAccessConfiguracion" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Configuración</p>
-      <SidebarLink label="Usuarios" link="/configuracion/usuarios" />
-      <SidebarLink label="Roles y permisos" link="/configuracion/roles-permisos" />
+      <SidebarLink v-if="canAccessUsuariosConfig" label="Usuarios" link="/configuracion/usuarios" />
+      <SidebarLink v-if="canAccessRolesPermisosConfig" label="Roles y permisos" link="/configuracion/roles-permisos" />
       <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
     </div>
@@ -61,13 +61,17 @@ onMounted(async () => {
   ensureUserPermissions()
 })
 
-// Verificar si es administrador
+// Verificar si es administrador por rol
 const isAdmin = computed(() => {
-  return hasRole('Admin') || hasRole('administrador') || hasRole('admin') || hasPermission('configuracion.permisos')
+  return hasRole('Admin') || hasRole('administrador') || hasRole('admin')
 })
 
 const isSuperAdmin = computed(() => {
   return hasRole('superadmin') || hasRole('Superadmin')
+})
+
+const isConfigAdmin = computed(() => {
+  return isAdmin.value || isSuperAdmin.value
 })
 
 // Verificar si puede acceder a la sección de cotizaciones
@@ -81,7 +85,27 @@ const canAccessTarifas = computed(() => {
 })
 
 // Verificar si puede acceder a programación/cirugía
+const canAccessProgramacion = computed(() => {
+  return hasPermission('programacion.ver') || isAdmin.value || isSuperAdmin.value
+})
+
+const canAccessProcedimientosCirugia = computed(() => {
+  return hasPermission('programacion.procedimientos.ver') || isAdmin.value || isSuperAdmin.value
+})
+
 const canAccessCirugia = computed(() => {
-  return hasAnyPermission(['programacion.ver', 'cotizar.ver', 'cirugia.ver', 'cirugias.ver']) || isAdmin.value || isSuperAdmin.value
+  return canAccessProgramacion.value || canAccessProcedimientosCirugia.value
+})
+
+const canAccessConfiguracion = computed(() => {
+  return isConfigAdmin.value || hasPermission('configuracion.errores.ver')
+})
+
+const canAccessUsuariosConfig = computed(() => {
+  return isConfigAdmin.value
+})
+
+const canAccessRolesPermisosConfig = computed(() => {
+  return isConfigAdmin.value
 })
 </script>

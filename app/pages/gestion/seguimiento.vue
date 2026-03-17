@@ -3,9 +3,26 @@ definePageMeta({
   middleware: ['sanctum:auth'],
 });
 
+const router = useRouter()
+const route = useRoute()
+
 const cotizaciones = ref([])
 const resetBuscador = ref(false)
 const busquedaRealizada = ref(false)
+const cargandoBusqueda = ref(false)
+
+const hayFiltrosDashboard = computed(() => {
+  return Boolean(
+    route.query.asesor_id ||
+    route.query.estado_id ||
+    route.query.codigo ||
+    route.query.documento ||
+    route.query.medico_id ||
+    route.query.entidad_id ||
+    route.query.fecha_inicio ||
+    route.query.fecha_fin
+  )
+})
 
 const formatoFecha = (fechaISO) => {
   if (!fechaISO) return ''
@@ -23,6 +40,10 @@ const actualizarResultados = (resultados) => {
   busquedaRealizada.value = true
 }
 
+const actualizarLoading = (estado) => {
+  cargandoBusqueda.value = Boolean(estado)
+}
+
 const nombrePaciente = (cotizacion) => {
   const paciente = cotizacion?.paciente || {}
   return paciente.nombre_completo || `${paciente.nombres || ''} ${paciente.apellidos || ''}`.trim() || 'Sin nombre'
@@ -32,13 +53,21 @@ const borrarFiltros = () => {
   cotizaciones.value = []
   resetBuscador.value = !resetBuscador.value
   busquedaRealizada.value = false
+  router.replace({ path: route.path, query: {} })
 };
 </script>
 
 <template>
   <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
-      <QuoterBuscador @resultados="actualizarResultados" :reset="resetBuscador" />
+      <QuoterBuscador @resultados="actualizarResultados" @loading="actualizarLoading" :reset="resetBuscador" />
+    </div>
+
+    <div
+      v-if="cargandoBusqueda && hayFiltrosDashboard"
+      class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-sm text-indigo-700 animate-pulse"
+    >
+      Aplicando filtros del dashboard y cargando resultados...
     </div>
 
     <div class="flex items-center justify-between gap-3">
@@ -73,6 +102,9 @@ const borrarFiltros = () => {
           </div>
 
           <div class="flex items-center gap-2 flex-wrap md:justify-end">
+            <span v-if="c.es_prioritaria" class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold uppercase tracking-wide">
+              Prioritaria
+            </span>
             <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide">
               {{ c.estado?.nombre || 'Sin estado' }}
             </span>
