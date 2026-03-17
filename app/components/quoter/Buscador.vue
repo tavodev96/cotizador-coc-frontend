@@ -5,7 +5,11 @@ const props = defineProps({
     reset: Boolean
 })
 
-const emit = defineEmits(['resultados'])
+const emit = defineEmits(['resultados', 'loading'])
+const route = useRoute()
+const router = useRouter()
+
+const buildRequestKey = (prefix) => `${prefix}-${Date.now()}`
 
 const filtros = ref({
     codigo: '',
@@ -15,13 +19,15 @@ const filtros = ref({
     fecha_fin: '',
     medico_id: '',
     entidad_id: '',
-    asesor_id: ''
+    asesor_id: '',
+    estado_id: ''
 })
 
 const registros = ref([])
 const medicos = ref([])
 const entidades = ref([])
 const asesores = ref([])
+const estados = ref([])
 
 const buscadorMedico = ref('')
 const buscadorEntidad = ref('')
@@ -76,18 +82,61 @@ const asesoresFiltrados = computed(() => {
 // Cargar catálogos al montar el componente
 const cargarCatalogos = async () => {
     try {
-        const res = await $fetch('http://localhost:8000/api/catalogos', {
+        const { data, error } = await useSanctumFetch('/api/catalogos', {
             method: 'GET',
-            credentials: 'include'
-        })
-        console.log('Respuesta catalogos:', res)
+        }, undefined, buildRequestKey('seguimiento-catalogos'))
+
+        if (error.value || !data.value) {
+            console.error('Error cargando catálogos:', error.value)
+            return
+        }
+
+        const res = data.value
         medicos.value = res.medicos || []
         entidades.value = res.entidades || []
         asesores.value = res.asesores || [] // Cuando lo traiga del backend
-        console.log('Catálogos cargados:', { medicos: medicos.value, entidades: entidades.value, asesores: asesores.value })
+        estados.value = res.estados || []
     } catch (error) {
         console.error('Error cargando catálogos:', error)
     }
+}
+
+const applyRouteFilters = () => {
+    const query = route.query
+    const maybeString = (value) => typeof value === 'string' ? value : ''
+
+    filtros.value.codigo = maybeString(query.codigo)
+    filtros.value.documento = maybeString(query.documento)
+    filtros.value.tipo_gestion = maybeString(query.tipo_gestion)
+    filtros.value.fecha_inicio = maybeString(query.fecha_inicio)
+    filtros.value.fecha_fin = maybeString(query.fecha_fin)
+    filtros.value.medico_id = maybeString(query.medico_id)
+    filtros.value.entidad_id = maybeString(query.entidad_id)
+    filtros.value.asesor_id = maybeString(query.asesor_id)
+    filtros.value.estado_id = maybeString(query.estado_id)
+
+    const medicoSeleccionado = medicos.value.find(item => String(item.id) === filtros.value.medico_id)
+    buscadorMedico.value = medicoSeleccionado?.nombre || ''
+
+    const entidadSeleccionada = entidades.value.find(item => String(item.id) === filtros.value.entidad_id)
+    buscadorEntidad.value = entidadSeleccionada?.nombre || ''
+
+    const asesorSeleccionado = asesores.value.find(item => String(item.id) === filtros.value.asesor_id)
+    buscadorAsesor.value = asesorSeleccionado?.nombre || asesorSeleccionado?.name || ''
+}
+
+const hasRouteFilters = () => {
+    return [
+        'codigo',
+        'documento',
+        'tipo_gestion',
+        'fecha_inicio',
+        'fecha_fin',
+        'medico_id',
+        'entidad_id',
+        'asesor_id',
+        'estado_id',
+    ].some(key => Boolean(route.query[key]))
 }
 
 const seleccionarMedico = (medico) => {
@@ -123,10 +172,18 @@ const seleccionarAsesor = (asesor) => {
     mostrarDropdownAsesores.value = false
 }
 
-const limpiarAsesor = () => {
+const limpiarAsesor = async () => {
     filtros.value.asesor_id = ''
     buscadorAsesor.value = ''
     mostrarDropdownAsesores.value = false
+
+    if (route.query.asesor_id) {
+        const nextQuery = { ...route.query }
+        delete nextQuery.asesor_id
+        await router.replace({ query: nextQuery })
+    }
+
+    await buscar()
 }
 
 const seleccionarPrimeraCoincidencia = (tipo) => {
@@ -170,8 +227,9 @@ const handleClickOutsideDropdowns = (event) => {
 
 const buscar = async () => {
     loading.value = true
+    emit('loading', true)
     try {
-        const res = await $fetch('http://localhost:8000/api/cotizaciones', {
+        const { data, error } = await useSanctumFetch('/api/cotizaciones', {
             method: 'GET',
             params: {
                 codigo: filtros.value.codigo,
@@ -182,13 +240,18 @@ const buscar = async () => {
                 medico_id: filtros.value.medico_id,
                 entidad_id: filtros.value.entidad_id,
                 asesor_id: filtros.value.asesor_id,
+                estado_id: filtros.value.estado_id,
                 _t: Date.now() // evita cache agregando timestamp
             },
-            credentials: 'include' // si usas Sanctum
-        })
-        console.log("validando fecth: ", res.data);
+        }, undefined, buildRequestKey('seguimiento-busqueda'))
 
-        registros.value = res.data
+        if (error.value || !data.value) {
+            console.error('Error buscando cotizaciones:', error.value)
+            emit('resultados', [])
+            return
+        }
+
+        registros.value = data.value.data || []
         emit('resultados', registros.value)
 
     } catch (error) {
@@ -196,11 +259,17 @@ const buscar = async () => {
         emit('resultados', [])
     } finally {
         loading.value = false
+        emit('loading', false)
     }
 }
 
 onMounted(() => {
-    cargarCatalogos()
+    cargarCatalogos().then(async () => {
+        applyRouteFilters()
+        if (hasRouteFilters()) {
+            await buscar()
+        }
+    })
     document.addEventListener('click', handleClickOutsideDropdowns)
 })
 
@@ -217,12 +286,26 @@ watch(() => props.reset, () => {
     filtros.value.medico_id = ''
     filtros.value.entidad_id = ''
     filtros.value.asesor_id = ''
+    filtros.value.estado_id = ''
     buscadorMedico.value = ''
     buscadorEntidad.value = ''
     buscadorAsesor.value = ''
     registros.value = []
     cerrarDropdowns()
 })
+
+watch(buscadorAsesor, (valor) => {
+    if (!String(valor || '').trim()) {
+        filtros.value.asesor_id = ''
+    }
+})
+
+watch(() => route.query, async () => {
+    applyRouteFilters()
+    if (hasRouteFilters()) {
+        await buscar()
+    }
+}, { deep: true })
 </script>
 
 <template>
@@ -299,6 +382,12 @@ watch(() => props.reset, () => {
 
         <input type="date" v-model="filtros.fecha_inicio" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
         <input type="date" v-model="filtros.fecha_fin" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
+        <select v-model="filtros.estado_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
+            <option value="">Estado de cotización</option>
+            <option v-for="estado in estados" :key="estado.id" :value="String(estado.id)">
+                {{ estado.nombre }}
+            </option>
+        </select>
         </div>
 
         <div class="flex justify-end">

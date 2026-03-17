@@ -7,7 +7,11 @@ definePageMeta({
   // admin-permisos removido temporalmente para configuración inicial
 })
 
-const { refreshUserPermissions } = useUserPermissions()
+const { refreshUserPermissions, hasRole } = useUserPermissions()
+
+const isConfigAdmin = computed(() => {
+  return hasRole('administrador') || hasRole('admin') || hasRole('Admin') || hasRole('superadmin')
+})
 
 const roles = ref([])
 const permissions = ref([])
@@ -19,6 +23,12 @@ const allPermissionNames = computed(() => permissions.value.map(permission => pe
 // Recargar permisos al montar
 onMounted(async () => {
   await refreshUserPermissions()
+
+  if (!isConfigAdmin.value) {
+    await navigateTo('/403')
+    return
+  }
+
   await fetchData()
 })
 
