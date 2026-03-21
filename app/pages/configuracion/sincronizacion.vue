@@ -68,6 +68,11 @@ const maintenancePipelines = [
     title: 'Insertar pacientes nuevos desde Informix',
     description: 'Inserta únicamente los pacientes que existen en Informix y aún no están en la base local. No modifica registros existentes.',
   },
+  {
+    key: 'entidades_update_or_create',
+    title: 'Actualizar o crear entidades',
+    description: 'Sincroniza las entidades desde Informix, actualizando o creando según corresponda en la base local.',
+  },
 ] as const
 
 const pipelines = [...mainPipelines, ...maintenancePipelines] as const

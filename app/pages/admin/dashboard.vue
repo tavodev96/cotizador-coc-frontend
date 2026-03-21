@@ -263,5 +263,10 @@ const fechaFormateada = computed(() => {
 
 onMounted(() => {
   actualizarDashboard(periodoSeleccionado.value)
+  console.log('Dashboard montado', {
+    roleDashboard: roleDashboard.value,
+    metricasDashboard: metricasDashboard.value,
+    totalOrdenamientos: totalOrdenamientos.value,
+  })
 })
 </script>
