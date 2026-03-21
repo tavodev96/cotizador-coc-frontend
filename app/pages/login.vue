@@ -7,7 +7,7 @@
             <div class="hidden lg:flex flex-col justify-between bg-gradient-to-br from-indigo-800 to-slate-900 p-10 text-white">
                 <div>
                     <a href="/">
-                        <img src="/img/logo_clinica_oftalmologia.png" class="w-56" alt="Clínica_de_oftalmologia_de_Cali">
+                        <img src="/img/logo_COFTAC.png" class="w-56" alt="Clínica_de_oftalmologia_de_Cali">
                     </a>
                 </div>
                 <div>
