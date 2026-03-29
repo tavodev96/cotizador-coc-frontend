@@ -48,7 +48,8 @@ const TEXTOS_EXCLUIDOS_CODIFICACION = [
 onMounted(async () => {
   // Si viene desde consultas, activar modo privado automáticamente
   if (modoConsulta.value) {
-    imprimirParaPaciente.value = true
+    imprimirParaPaciente.value = false
+    imprimirParaPacienteDetallada.value = false
   }
 
   try {
@@ -658,7 +659,7 @@ const descargarPDF = async () => {
             </tbody>
           </table>
         </div>
-        <div v-if="modoPacienteResumen && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+        <div v-if="modoPacienteResumen && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
           <!-- Insumos (agregados con valores) -->
           <template v-if="detallesAgrupados.insumos.length > 0">
             <h2 class="text-base font-bold mb-2">INSUMOS</h2>
