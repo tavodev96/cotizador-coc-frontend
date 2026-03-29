@@ -32,14 +32,14 @@
                     class="p-2 border rounded col-span-2 bg-gray-100" type="text" disabled />
             </div>
             <div class="flex flex-col gap-1">
-                <label class="font-semibold">Fecha de vigencia:</label>
-                <input v-model="fechaVigencia" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
-                    @change="handleBlur('fechaVigencia')" />
-            </div>
-            <div class="flex flex-col gap-1">
                 <label class="font-semibold">Fecha de autorización:</label>
                 <input v-model="fechaAutorizacion" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
                     @change="handleBlur('fechaAutorizacion')" />
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="font-semibold">Fecha de vigencia:</label>
+                <input v-model="fechaVigencia" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
+                    @change="handleBlur('fechaVigencia')" />
             </div>
         </div>
     </div>

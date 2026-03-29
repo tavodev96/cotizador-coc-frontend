@@ -56,7 +56,10 @@ const fetchDetalle = async () => {
 
 const fetchEstados = async () => {
   const { data } = await useSanctumFetch('/api/estados/cotizacion', { method: 'GET' })
-  estadosAdministrativos.value = data.value.sort((a, b) => a.orden - b.orden);
+  const lista = Array.isArray(data.value) ? data.value : []
+  estadosAdministrativos.value = lista
+    .filter((estado) => String(estado?.nombre || '').toUpperCase().trim() !== 'ANULADA')
+    .sort((a, b) => a.orden - b.orden)
 }
 
 const togglePrioridad = async () => {
@@ -312,6 +315,34 @@ const totalConDetalles = computed(() => {
 
   return (parseFloat(cotizacion.value.total) || 0) + totalDetalles
 })
+
+const vigenciaChipClass = computed(() => {
+  const estado = cotizacion.value?.vigencia?.estado || ''
+
+  if (estado === 'vencida') {
+    return 'bg-rose-100 text-rose-700'
+  }
+
+  if (estado === 'por_vencer') {
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  if (estado === 'vigente') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+
+  return 'bg-slate-100 text-slate-700'
+})
+
+const mostrarChipVigencia = computed(() => {
+  return Boolean(cotizacion.value?.vigencia?.mostrar !== false && cotizacion.value?.vigencia?.label)
+})
+
+const fechaAutorizacionFormateada = computed(() => {
+  const valor = cotizacion.value?.codificacion?.fecha_autorizacion
+  if (!valor) return ''
+  return formatoFecha(valor)
+})
 </script>
 
 <template>
@@ -362,6 +393,12 @@ const totalConDetalles = computed(() => {
         <p v-if="cotizacion?.codificacion" class="text-slate-700"><span class="font-bold">Codificación:</span> <span
             class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{
               cotizacion?.codificacion?.numero_autorizacion }}</span></p>
+        <p v-if="mostrarChipVigencia" class="text-slate-700">
+          <span class="font-bold">Vigencia:</span>
+          <span class="rounded-full px-2.5 py-1 text-sm font-semibold" :class="vigenciaChipClass">
+            {{ cotizacion?.vigencia?.label }}
+          </span>
+        </p>
       </div>
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
         <div class="flex flex-wrap items-center gap-2">
@@ -493,6 +530,13 @@ const totalConDetalles = computed(() => {
               {{
                 formatoFecha(cotizacion?.codificacion.fecha_vigencia) }}
             </span>
+          </li>
+          <li class="flex items-center gap-1" v-if="fechaAutorizacionFormateada">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#172983" d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zm12 6H5v11h14z"/>
+            </svg>
+            Fecha de autorización:
+            <span class="text-indigo-700 font-bold">{{ fechaAutorizacionFormateada }}</span>
           </li>
         </ul>
       </div>

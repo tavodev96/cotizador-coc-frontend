@@ -244,31 +244,42 @@
                     </div>
 
                     <div v-for="(item, index) in cotizacion.items" :key="index"
-                        class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
+                        class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-end">
 
-                        <input v-model="item.codigo" @blur="buscarCodigo(item.codigo, index)" placeholder="Código"
-                            class="p-2 border rounded"
-                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-2': !isCodificacion }]" />
+                        <div :class="[{ 'md:col-span-2': isCodificacion, 'md:col-span-2': !isCodificacion }]">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Código</label>
+                            <input v-model="item.codigo" @blur="buscarCodigo(item.codigo, index)" placeholder="Código"
+                                class="p-2 border rounded w-full" />
+                        </div>
 
+                        <div :class="[{ 'md:col-span-7': isCodificacion, 'md:col-span-4': !isCodificacion }]">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre</label>
+                            <input v-model="item.nombre" placeholder="Nombre"
+                                class="p-2 border rounded w-full" />
+                        </div>
 
-                        <input v-model="item.nombre" placeholder="Nombre"
-                            :class="[{ 'p-2 border rounded md:col-span-6': isCodificacion, 'p-2 border rounded md:col-span-4': !isCodificacion }]" />
+                        <div :class="[{ 'md:col-span-2': isCodificacion, 'md:col-span-2': !isCodificacion }]">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Lateralidad</label>
+                            <select v-model="item.lateralidad" @change="handleLateralidadChange(index)"
+                                class="p-2 border rounded w-full">
+                                <option value="" disabled>Seleccione</option>
+                                <option v-for="lateral in lateralidad" :key="lateral" :value="lateral">{{ lateral }}</option>
+                            </select>
+                        </div>
 
-                        <select v-show="!isCodificacion" v-model="item.lateralidad" @change="handleLateralidadChange"
-                            class="p-2 border rounded md:col-span-2">
-                            <option v-for="lateral in lateralidad" :key="lateral" :value="lateral">{{ lateral }}
-                            </option>
-                        </select>
+                        <div v-show="!isCodificacion" class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Valor</label>
+                            <input :value="formatearNumero(item.valor_con_descuento ?? item.valor)"
+                                placeholder="Valor" class="p-2 border rounded w-full" type="text"
+                                @input="onItemValorInput($event.target.value, index)" />
+                        </div>
 
-                        <input v-show="!isCodificacion" :value="formatearNumero(item.valor_con_descuento ?? item.valor)"
-                            placeholder="Valor" class="p-2 border rounded md:col-span-2" type="text"
-                            @input="onItemValorInput($event.target.value, index)" />
-
-
-                        <input v-show="!isCodificacion" v-model.number="item.descuento" placeholder="% Desc"
-                            @change="calcularTotal(index)" class="p-2 border rounded md:col-span-1" type="number" min="0"
-                            max="100" />
-
+                        <div v-show="!isCodificacion" class="md:col-span-1">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Descuento</label>
+                            <input v-model.number="item.descuento" placeholder="% Desc"
+                                @change="calcularTotal(index)" class="p-2 border rounded w-full" type="number" min="0"
+                                max="100" />
+                        </div>
 
                         <button @click="eliminarItem(index)"
                             class="text-red-600 font-bold text-xl hover:text-red-800 md:col-span-1 justify-self-end">×</button>
@@ -581,6 +592,7 @@ const loadingPaciente = ref(false);
 const loadingBuscarCodigo = ref(false);
 const cotizandoLaser = ref(false);
 const cotizandoPlasticaOcular = ref(false);
+const fechaOrdenamiento = ref('');
 const tipoBusquedaCodigo = computed(() => {
     if (cotizandoLaser.value) return 'laser';
     if (cotizandoPlasticaOcular.value) return 'plastica_ocular';
@@ -798,6 +810,26 @@ const parseQueryValues = (value, separator = ',') => {
         .filter(Boolean)
 }
 
+const normalizarFechaParaApi = (value) => {
+    if (!value) return ''
+
+    const texto = String(value).trim()
+    const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (iso) return texto
+
+    const latam = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (latam) {
+        return `${latam[3]}-${latam[2]}-${latam[1]}`
+    }
+
+    const parsed = new Date(texto)
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0]
+    }
+
+    return ''
+}
+
 const cargarCodigosDesdeQuery = async (codes) => {
     const unicos = Array.from(new Set((codes || []).filter(Boolean)))
 
@@ -826,6 +858,7 @@ onMounted(async () => {
         }
 
         if (route.query) {
+            fechaOrdenamiento.value = normalizarFechaParaApi(route.query.fecha_ordenamiento)
 
             if (route.query.numero_identificacion) {
                 paciente.value.numero_identificacion = route.query.numero_identificacion
@@ -1177,9 +1210,21 @@ const handlePlasticaChange = () => {
     }
 }
 
-const handleLateralidadChange = () => {
+const handleLateralidadChange = (index) => {
+    const itemActual = cotizacion.value.items[index]
+    const codigoActual = String(itemActual?.codigo || '').trim()
+
+    if (codigoActual && itemActual?.lateralidad) {
+        cotizacion.value.items.forEach((item, idx) => {
+            const codigoItem = String(item?.codigo || '').trim()
+            if (idx !== index && codigoItem === codigoActual) {
+                item.lateralidad = itemActual.lateralidad
+            }
+        })
+    }
+
     // Solo aplicar la fórmula si NO está cotizando láser ni plastica ocular
-    if (!cotizandoLaser.value && !cotizandoPlasticaOcular.value) {
+    if (cotizacion.value.tipo_gestion === 'cotización' && !cotizandoLaser.value && !cotizandoPlasticaOcular.value) {
         aplicarFormulaLateralidad();
     }
 }
@@ -1364,6 +1409,7 @@ const guardarCotizacion = async () => {
     try {
         let payload = {
             origen: cotizacion.value.origen,
+            fecha_ordenamiento: fechaOrdenamiento.value || null,
             tipo_gestion: cotizacion.value.tipo_gestion,
             medico_id: cotizacion.value.medico_id,
             entidad_id: paciente.value.entidad_id,

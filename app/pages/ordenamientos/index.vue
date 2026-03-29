@@ -101,6 +101,7 @@ const generarCotizacion = (item) => {
         query: {
             tipo_identificacion: 'CC',
             numero_identificacion: item.documento,
+            fecha_ordenamiento: item.fecha,
             entidad_cod: item.entidad_cod,
             entidad: item.entidad_nom,
             medico: item.medico,

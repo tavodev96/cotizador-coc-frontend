@@ -15,6 +15,7 @@ const hayFiltrosDashboard = computed(() => {
   return Boolean(
     route.query.asesor_id ||
     route.query.estado_id ||
+    route.query.vigencia_estado ||
     route.query.codigo ||
     route.query.documento ||
     route.query.medico_id ||
@@ -47,6 +48,24 @@ const actualizarLoading = (estado) => {
 const nombrePaciente = (cotizacion) => {
   const paciente = cotizacion?.paciente || {}
   return paciente.nombre_completo || `${paciente.nombres || ''} ${paciente.apellidos || ''}`.trim() || 'Sin nombre'
+}
+
+const claseVigencia = (vigencia) => {
+  const estado = vigencia?.estado || ''
+
+  if (estado === 'vencida') {
+    return 'bg-rose-100 text-rose-700'
+  }
+
+  if (estado === 'por_vencer') {
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  if (estado === 'vigente') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+
+  return 'bg-slate-100 text-slate-700'
 }
 
 const borrarFiltros = () => {
@@ -104,6 +123,13 @@ const borrarFiltros = () => {
           <div class="flex items-center gap-2 flex-wrap md:justify-end">
             <span v-if="c.es_prioritaria" class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold uppercase tracking-wide">
               Prioritaria
+            </span>
+            <span
+              v-if="c.vigencia?.label"
+              class="px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide"
+              :class="claseVigencia(c.vigencia)"
+            >
+              {{ c.vigencia.label }}
             </span>
             <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide">
               {{ c.estado?.nombre || 'Sin estado' }}

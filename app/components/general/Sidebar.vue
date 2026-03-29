@@ -34,6 +34,12 @@
       <SidebarLink label="Lentes" link="/tarifas/lentes" />
     </div>
 
+    <!-- Reportes - Visible según permisos de reportes -->
+    <div v-if="canAccessReportes" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
+      <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Reportes</p>
+      <SidebarLink v-if="canAccessReporteCotizaciones" label="Reporte de cotizaciones" link="/reportes/cotizaciones" />
+    </div>
+
     <!-- Configuración - Visible si tiene permisos de configuración -->
     <div v-if="canAccessConfiguracion" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Configuración</p>
@@ -107,5 +113,13 @@ const canAccessUsuariosConfig = computed(() => {
 
 const canAccessRolesPermisosConfig = computed(() => {
   return isConfigAdmin.value
+})
+
+const canAccessReportes = computed(() => {
+  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver']) || isAdmin.value || isSuperAdmin.value
+})
+
+const canAccessReporteCotizaciones = computed(() => {
+  return hasPermission('reportes.cotizaciones.ver') || isAdmin.value || isSuperAdmin.value
 })
 </script>
