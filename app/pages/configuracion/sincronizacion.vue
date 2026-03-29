@@ -73,6 +73,11 @@ const maintenancePipelines = [
     title: 'Actualizar o crear entidades',
     description: 'Sincroniza las entidades desde Informix, actualizando o creando según corresponda en la base local.',
   },
+  {
+    key: 'codigos_laser_procedimientos',
+    title: 'Importar códigos láser a procedimientos',
+    description: 'Trae códigos láser desde Informix y los inserta/actualiza en la tabla de procedimientos local.',
+  },
 ] as const
 
 const pipelines = [...mainPipelines, ...maintenancePipelines] as const
@@ -303,6 +308,7 @@ onMounted(async () => {
             <option value="recursos_consultorios">Recursos a consultorios</option>
             <option value="pacientes_informix">Pacientes Informix (sync completa)</option>
             <option value="pacientes_nuevos_informix">Pacientes nuevos Informix</option>
+            <option value="codigos_laser_procedimientos">Códigos láser a procedimientos</option>
           </select>
         </div>
         <div>

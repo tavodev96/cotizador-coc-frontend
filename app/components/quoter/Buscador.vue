@@ -15,6 +15,7 @@ const filtros = ref({
     codigo: '',
     documento: '',
     tipo_gestion: '',
+    vigencia_estado: '',
     fecha_inicio: '',
     fecha_fin: '',
     medico_id: '',
@@ -28,6 +29,21 @@ const medicos = ref([])
 const entidades = ref([])
 const asesores = ref([])
 const estados = ref([])
+
+const estadosFiltrados = computed(() => {
+    return (estados.value || [])
+        .filter(estado => {
+            const nombre = String(estado?.nombre || '').toUpperCase().trim()
+            return nombre !== 'ANULADA'
+        })
+        .map(estado => {
+            const nombre = String(estado?.nombre || '').toUpperCase().trim()
+            if (nombre === 'RECHAZADA') {
+                return { ...estado, nombre: 'RECHAZADA' }
+            }
+            return estado
+        })
+})
 
 const buscadorMedico = ref('')
 const buscadorEntidad = ref('')
@@ -108,12 +124,17 @@ const applyRouteFilters = () => {
     filtros.value.codigo = maybeString(query.codigo)
     filtros.value.documento = maybeString(query.documento)
     filtros.value.tipo_gestion = maybeString(query.tipo_gestion)
+    filtros.value.vigencia_estado = maybeString(query.vigencia_estado)
     filtros.value.fecha_inicio = maybeString(query.fecha_inicio)
     filtros.value.fecha_fin = maybeString(query.fecha_fin)
     filtros.value.medico_id = maybeString(query.medico_id)
     filtros.value.entidad_id = maybeString(query.entidad_id)
     filtros.value.asesor_id = maybeString(query.asesor_id)
     filtros.value.estado_id = maybeString(query.estado_id)
+
+    if (filtros.value.estado_id === '4') {
+        filtros.value.estado_id = '6'
+    }
 
     const medicoSeleccionado = medicos.value.find(item => String(item.id) === filtros.value.medico_id)
     buscadorMedico.value = medicoSeleccionado?.nombre || ''
@@ -130,6 +151,7 @@ const hasRouteFilters = () => {
         'codigo',
         'documento',
         'tipo_gestion',
+        'vigencia_estado',
         'fecha_inicio',
         'fecha_fin',
         'medico_id',
@@ -237,10 +259,12 @@ const buscar = async () => {
                 fecha_inicio: filtros.value.fecha_inicio,
                 fecha_fin: filtros.value.fecha_fin,
                 tipo_gestion: filtros.value.tipo_gestion,
+                vigencia_estado: filtros.value.vigencia_estado,
                 medico_id: filtros.value.medico_id,
                 entidad_id: filtros.value.entidad_id,
                 asesor_id: filtros.value.asesor_id,
                 estado_id: filtros.value.estado_id,
+                estado_ids: filtros.value.estado_id === '6' ? '4,6' : undefined,
                 _t: Date.now() // evita cache agregando timestamp
             },
         }, undefined, buildRequestKey('seguimiento-busqueda'))
@@ -281,6 +305,7 @@ watch(() => props.reset, () => {
     filtros.value.codigo = ''
     filtros.value.documento = ''
     filtros.value.tipo_gestion = ''
+    filtros.value.vigencia_estado = ''
     filtros.value.fecha_inicio = ''
     filtros.value.fecha_fin = ''
     filtros.value.medico_id = ''
@@ -318,6 +343,13 @@ watch(() => route.query, async () => {
             <option value="cotización">Cotización</option>
             <option value="información">Información</option>
             <option value="codificación">Codificación</option>
+        </select>
+
+        <select v-model="filtros.vigencia_estado" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
+            <option value="">Vigencia (todas)</option>
+            <option value="vigente">Vigente</option>
+            <option value="por_vencer">Por vencer (0-7 días)</option>
+            <option value="vencida">Vencida</option>
         </select>
         
         <!-- Select buscable para médicos -->
@@ -384,7 +416,7 @@ watch(() => route.query, async () => {
         <input type="date" v-model="filtros.fecha_fin" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
         <select v-model="filtros.estado_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
             <option value="">Estado de cotización</option>
-            <option v-for="estado in estados" :key="estado.id" :value="String(estado.id)">
+            <option v-for="estado in estadosFiltrados" :key="estado.id" :value="String(estado.id)">
                 {{ estado.nombre }}
             </option>
         </select>
