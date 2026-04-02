@@ -555,7 +555,10 @@ const fechaAutorizacionFormateada = computed(() => {
       </p>
       <div class="mt-6 flex justify-end items-center">
         <div v-if="cotizacion" class="flex justify-end items-center gap-2">
-          <NuxtLink :to="`/cotizacion/imprimir/${cotizacion.id}`"
+          <NuxtLink :to="{
+            path: `/cotizacion/imprimir/${cotizacion.id}`,
+            query: cotizacion?.tipo_gestion === 'codificación' ? { paciente: '1', origen: 'codificacion' } : {}
+          }"
             class="bg-emerald-600 text-white px-4 py-2 rounded-lg">
             Imprimir {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }}</NuxtLink>
           

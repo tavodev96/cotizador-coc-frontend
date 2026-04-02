@@ -18,6 +18,7 @@ const imprimirParaPacienteDetallada = ref(false)
 
 // Detectar si viene desde la página de consultas
 const modoConsulta = computed(() => route.query.modo === 'consulta')
+const activarPacienteDesdeCodificacion = computed(() => route.query.paciente === '1' || route.query.origen === 'codificacion')
 
 const esCodificacion = computed(() => cotizacion.value?.tipo_gestion === 'codificación')
 const esCotizacion = computed(() => cotizacion.value?.tipo_gestion === 'cotización')
@@ -49,6 +50,9 @@ onMounted(async () => {
   // Si viene desde consultas, activar modo privado automáticamente
   if (modoConsulta.value) {
     imprimirParaPaciente.value = false
+    imprimirParaPacienteDetallada.value = false
+  } else if (activarPacienteDesdeCodificacion.value) {
+    imprimirParaPaciente.value = true
     imprimirParaPacienteDetallada.value = false
   }
 
@@ -252,6 +256,19 @@ const totalMostrado = computed(() => {
 
   // En codificación se imprime exclusivamente el total de codificación (sin sumar valor del procedimiento).
   return totalBaseCodificacion.value
+})
+
+const fechaHoraCreacion = computed(() => {
+  const value = cotizacion.value?.created_at
+  if (!value) return 'Fecha no disponible'
+
+  const fecha = new Date(value)
+  if (Number.isNaN(fecha.getTime())) return String(value)
+
+  // timeStyle: 'short',
+  return new Intl.DateTimeFormat('es-CO', {
+    dateStyle: 'long',
+  }).format(fecha)
 })
 
 const formatDate = (value) => {
@@ -520,7 +537,7 @@ const descargarPDF = async () => {
       <div class="flex justify-between items-start mb-2">
         <div>
           <img src="/img/logo_clinica_oftalmologia.png" alt="clinicaofta" class="h-16 mb-4" />
-          <p>Santiago de Cali,</p>
+          <p>Santiago de Cali, {{ fechaHoraCreacion }}</p>
         </div>
         <div class="text-right">
           <p><strong>{{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} N°:</strong> {{
@@ -848,14 +865,14 @@ const descargarPDF = async () => {
 
       <div v-else-if="esCotizacion" class="inline-flex items-center">
         <div class="inline-flex items-center gap-3 flex-wrap">
-          <button
+          <!-- <button
             class="px-4 py-2 rounded text-white"
             :class="imprimirParaPaciente && !imprimirParaPacienteDetallada ? 'bg-[#162983]' : 'bg-gray-500'"
             @click="toggleImprimirPaciente"
             :disabled="modoConsulta"
           >
             Imprimir información de la cotización para el paciente
-          </button>
+          </button> -->
 
           <button
             class="px-4 py-2 rounded text-white"
@@ -863,7 +880,7 @@ const descargarPDF = async () => {
             @click="toggleImprimirPacienteDetallada"
             :disabled="modoConsulta"
           >
-            Imprimir información de la cotización para el paciente - detallada
+            Imprimir detallada
           </button>
 
           <span class="text-sm" :class="modoConsulta ? 'text-blue-600' : 'text-gray-700'">

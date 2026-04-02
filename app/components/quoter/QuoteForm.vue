@@ -79,6 +79,7 @@
                             class="w-full h-12 border border-slate-300 rounded-lg pl-10 pr-3 bg-white"
                             placeholder="Buscar entidad"
                             @focus="mostrarDropdownEntidad = true"
+                            @input="handleEntidadInput"
                             @keydown.enter.prevent="seleccionarPrimeraCoincidencia('entidad')"
                             @keydown.esc="mostrarDropdownEntidad = false"
                         />
@@ -210,7 +211,7 @@
                 </div>
 
                 <div class="md:col-span-2 mt-4">
-                    <div class="flex items-center gap-4 mb-2">
+                    <div v-show="!isCodificacion" class="flex items-center gap-4 mb-2">
                         <div class="flex items-center gap-2">
                             <input type="checkbox" id="cotizar-laser" v-model="cotizandoLaser" @change="handleLaserChange" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
                             <label for="cotizar-laser" class="text-sm font-medium text-gray-700">Vas a cotizar laser</label>
@@ -640,6 +641,19 @@ const seleccionarEntidad = (entidad) => {
     mostrarDropdownEntidad.value = false
 }
 
+const handleEntidadInput = () => {
+    const termino = String(buscadorEntidad.value || '').trim()
+    const entidadSeleccionada = entidades.value.find((e) => Number(e.id) === Number(paciente.value.entidad_id))
+
+    if (!termino) {
+        paciente.value.entidad_id = ''
+    } else if (entidadSeleccionada && normalizar(entidadSeleccionada.nombre) !== normalizar(termino)) {
+        paciente.value.entidad_id = ''
+    }
+
+    mostrarDropdownEntidad.value = true
+}
+
 const seleccionarMedico = (medico) => {
     cotizacion.value.medico_id = Number(medico.id)
     buscadorMedico.value = medico.nombre
@@ -707,8 +721,9 @@ const validarTipoGestion = () => {
 watch(
     [entidades, () => paciente.value.entidad_id],
     () => {
+        if (!paciente.value.entidad_id) return
         const entidad = entidades.value.find((e) => Number(e.id) === Number(paciente.value.entidad_id))
-        buscadorEntidad.value = entidad?.nombre || ''
+        buscadorEntidad.value = entidad?.nombre || buscadorEntidad.value
     },
     { immediate: true }
 )
@@ -979,6 +994,21 @@ const buscarCodigo = async (codigo, index) => {
         if (!data.value || data.value.length === 0) {
             pushNotification('error', 'Código no encontrado', 'Error');
             return 'not-found';
+        }
+
+        if (isCodificacion.value) {
+            const primerResultado = data.value[0];
+
+            Object.assign(cotizacion.value.items[index], {
+                codigo: primerResultado.protarpro || primerResultado.codigo || codigo,
+                nombre: primerResultado.actnom || primerResultado.nombre || '',
+                valor: 0,
+                concepto: '',
+                connom: '',
+                descuento: 0
+            });
+
+            return 'single';
         }
 
         if (data.value.length === 1) {
@@ -1362,6 +1392,16 @@ watch(
     }
 );
 
+watch(
+    () => isCodificacion.value,
+    (esCodificacion) => {
+        if (esCodificacion) {
+            cotizandoLaser.value = false;
+            cotizandoPlasticaOcular.value = false;
+        }
+    }
+);
+
 const getApiErrorMessage = (apiError, fallbackMessage) => {
     const data = apiError?.data || {}
 
@@ -1513,6 +1553,14 @@ const guardarCotizacion = async () => {
         const createdId = apiData?.id;
         if (createdId) {
             setTimeout(() => {
+                if (isCodificacion.value) {
+                    router.push({
+                        path: `/cotizacion/imprimir/${createdId}`,
+                        query: { paciente: '1', origen: 'codificacion' }
+                    });
+                    return;
+                }
+
                 router.push(`/cotizacion/imprimir/${createdId}`);
             }, 2500);
         }
