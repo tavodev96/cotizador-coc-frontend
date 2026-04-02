@@ -33,7 +33,7 @@
             </div>
             <div class="flex flex-col gap-1">
                 <label class="font-semibold">Fecha de autorización:</label>
-                <input v-model="fechaAutorizacion" type="date" :min="fechaMinima" class="p-2 border rounded col-span-2"
+                <input v-model="fechaAutorizacion" type="date" class="p-2 border rounded col-span-2"
                     @change="handleBlur('fechaAutorizacion')" />
             </div>
             <div class="flex flex-col gap-1">

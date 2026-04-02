@@ -7,14 +7,19 @@ definePageMeta({
 
 const config = useRuntimeConfig()
 const router = useRouter()
+const hoy = new Date().toISOString().split('T')[0]
 const entidad = ref('')
+const entidades = ref([])
+const searchEntidad = ref('')
+const showEntidadSuggestions = ref(false)
 const medico = ref('')
 const medicos = ref([])
 const searchMedico = ref('')
 const showSuggestions = ref(false)
+const soloParticular = ref(false)
 const search = ref('')
-const fechaInicio = ref('')
-const fechaFin = ref('')
+const fechaInicio = ref(hoy)
+const fechaFin = ref(hoy)
 const data = ref([])
 const page = ref(1)
 const perPage = 10
@@ -80,7 +85,8 @@ const fetchData = async () => {
                 fecha_inicio: fechaInicio.value,
                 fecha_fin: fechaFin.value,
                 identificacion: search.value,
-                medico: medico.value
+                medico: medico.value,
+                solo_particular: soloParticular.value ? 1 : 0,
             }
         })
         data.value = Array.isArray(response.items) ? response.items : (response || [])
@@ -128,14 +134,39 @@ const getMedicoLabel = (m) => {
     return m?.medico || m?.nombre || m?.nom || m?.name || m?.label || ''
 }
 
+const getEntidadLabel = (e) => {
+    return e?.nombre || e?.entidad_nom || ''
+}
+
 const getMedicoId = (m) => {
     return m?.identificacion ?? m?.id_medico ?? m?.id ?? m?.value ?? ''
+}
+
+const getEntidadId = (e) => {
+    return e?.id ?? e?.value ?? ''
 }
 
 const filteredMedicos = computed(() => {
     if (!searchMedico.value) return medicos.value
     return medicos.value.filter(m => getMedicoLabel(m).toLowerCase().includes(searchMedico.value.toLowerCase()))
 })
+
+const filteredEntidades = computed(() => {
+    if (!searchEntidad.value) return entidades.value
+    return entidades.value.filter(e => getEntidadLabel(e).toLowerCase().includes(searchEntidad.value.toLowerCase()))
+})
+
+const selectEntidad = (e) => {
+    entidad.value = getEntidadLabel(e)
+    searchEntidad.value = getEntidadLabel(e)
+    showEntidadSuggestions.value = false
+}
+
+const seleccionarPrimeraEntidad = () => {
+    if (filteredEntidades.value.length === 1) {
+        selectEntidad(filteredEntidades.value[0])
+    }
+}
 
 const selectMedico = (m) => {
     medico.value = getMedicoId(m)
@@ -156,15 +187,21 @@ const handleClickOutsideMedicos = (event) => {
     if (!target.closest('[data-dropdown="medico"]')) {
         showSuggestions.value = false
     }
+
+    if (!target.closest('[data-dropdown="entidad"]')) {
+        showEntidadSuggestions.value = false
+    }
 }
 
 const clearFilters = () => {
     entidad.value = ''
+    searchEntidad.value = ''
     search.value = ''
     medico.value = ''
     searchMedico.value = ''
-    fechaInicio.value = ''
-    fechaFin.value = ''
+    fechaInicio.value = hoy
+    fechaFin.value = hoy
+    soloParticular.value = false
 }
 
 onMounted(async () => {
@@ -174,6 +211,7 @@ onMounted(async () => {
         )
         if (status.value === 'success') {
             medicos.value = data.value.data.value.medicos
+            entidades.value = data.value.data.value.entidades
         }
     } catch (e) {
         console.error('Error cargando catalogos:', e)
@@ -184,6 +222,21 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutsideMedicos)
+})
+
+watch(soloParticular, (value) => {
+    if (value) {
+        entidad.value = ''
+        searchEntidad.value = ''
+        showEntidadSuggestions.value = false
+    }
+})
+
+watch(searchEntidad, (value) => {
+    const texto = String(value || '').trim()
+    if (!texto) {
+        entidad.value = ''
+    }
 })
 
 const pushNotification = (type, message, title) => {
@@ -205,7 +258,24 @@ const pushNotification = (type, message, title) => {
             <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Ordenamientos</h1>
 
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                <input type="text" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" placeholder="NIT Entidad" v-model="entidad" />
+                <div class="w-full relative" data-dropdown="entidad">
+                    <input
+                        type="text"
+                        class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        placeholder="Entidad"
+                        v-model="searchEntidad"
+                        :disabled="soloParticular"
+                        @input="showEntidadSuggestions = true"
+                        @focus="showEntidadSuggestions = true"
+                        @keydown.enter.prevent="seleccionarPrimeraEntidad"
+                        @keydown.esc="showEntidadSuggestions = false"
+                    />
+                    <ul v-show="!soloParticular && showEntidadSuggestions && filteredEntidades.length" class="absolute z-20 bg-white border border-slate-200 w-full max-h-48 overflow-auto mt-1 rounded-lg shadow-sm">
+                        <li v-for="e in filteredEntidades" :key="getEntidadId(e)" @mousedown.prevent="selectEntidad(e)" class="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm text-slate-700">
+                            {{ getEntidadLabel(e) }}
+                        </li>
+                    </ul>
+                </div>
                 <input v-model="search" placeholder="N° de identificación" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" />
 
                 <div class="w-full relative" data-dropdown="medico">
@@ -228,6 +298,11 @@ const pushNotification = (type, message, title) => {
 
                 <input type="date" v-model="fechaInicio" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
                 <input type="date" v-model="fechaFin" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
+
+                <label class="inline-flex items-center gap-2 h-11 px-1 text-sm text-slate-700">
+                    <input type="checkbox" v-model="soloParticular" class="w-4 h-4 rounded border-slate-300" />
+                    Solo particular
+                </label>
 
                 <div class="flex items-center gap-2">
                     <button @click="fetchData" class="h-11 px-5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-medium">Buscar</button>
