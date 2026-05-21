@@ -22,6 +22,16 @@ const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
 const savingPriority = ref(false)
+const syncingSalesforce = ref(false)
+const lastSalesforceLog = ref(null)
+const canSyncSalesforce = ref(false)
+
+const checkSalesforcePermission = () => {
+  const user = useUserStore?.()
+  if (user && user.permissions) {
+    canSyncSalesforce.value = user.permissions.includes('integraciones.salesforce.sincronizar')
+  }
+}
 
 const intendedEstado = ref(null)
 const mostrarModalComentario = ref(false)
@@ -101,6 +111,39 @@ const pushNotification = (type, message, title) => {
     message: message,
     ariaRole: 'alert'
   })
+}
+
+const syncSalesforce = async () => {
+  if (syncingSalesforce.value) return
+  syncingSalesforce.value = true
+
+  try {
+    const { data, error } = await useSanctumFetch(`/api/salesforce/sync/${route.params.id}`, { method: 'POST' })
+
+    if (error.value) {
+      pushNotification('error', 'No se pudo encolar la sincronización con Salesforce', 'Error')
+    } else {
+      pushNotification('success', 'Sincronización encolada correctamente', 'Éxito')
+      // Cargar el log más reciente
+      await fetchLastSalesforceLog()
+    }
+  } catch (e) {
+    console.error('Error al sincronizar con Salesforce:', e)
+    pushNotification('error', 'Excepción al sincronizar con Salesforce', 'Error')
+  } finally {
+    syncingSalesforce.value = false
+  }
+}
+
+const fetchLastSalesforceLog = async () => {
+  try {
+    const { data } = await useSanctumFetch(`/api/salesforce/logs/${route.params.id}/last`)
+    if (data.value?.data) {
+      lastSalesforceLog.value = data.value.data
+    }
+  } catch (e) {
+    console.error('Error al cargar último log de Salesforce:', e)
+  }
 }
 
 const onFileChange = (e) => {
@@ -259,9 +302,11 @@ const cancelarModalComentario = () => {
 
 onMounted(async () => {
   try {
+    // checkSalesforcePermission()
     await Promise.all([
       fetchDetalle(),
-      fetchEstados()
+      fetchEstados(),
+      // fetchLastSalesforceLog()
     ]);
   } catch (e) {
     pushNotification('error', 'No se pudo cargar la cotización', 'Error')
@@ -564,6 +609,29 @@ const fechaAutorizacionFormateada = computed(() => {
           
           <NuxtLink :to="`/cotizacion/editar/${cotizacion.id}`"
             class="bg-indigo-700 text-white px-4 py-2 rounded-lg"> Editar</NuxtLink>
+          <button v-if="canSyncSalesforce" @click="syncSalesforce" :disabled="syncingSalesforce"
+            class="bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-sky-700 transition">
+            <template v-if="!syncingSalesforce">Sincronizar</template>
+            <template v-else>
+              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              Sincronizando...
+            </template>
+          </button>
+          <div v-if="canSyncSalesforce && lastSalesforceLog" class="flex flex-col gap-1 text-xs p-2 bg-slate-100 rounded-lg">
+            <span class="font-semibold">Última sincronización:</span>
+            <span :class="{
+              'text-green-600': lastSalesforceLog.status === 'success',
+              'text-red-600': lastSalesforceLog.status === 'error',
+              'text-yellow-600': lastSalesforceLog.status === 'queued'
+            }">
+              Estado: {{ lastSalesforceLog.status }}
+            </span>
+            <span class="text-slate-600">{{ formatoFecha(lastSalesforceLog.created_at) }}</span>
+            <span v-if="lastSalesforceLog.error_message" class="text-red-600">Error: {{ lastSalesforceLog.error_message }}</span>
+          </div>
         </div>
       </div>
     </section>

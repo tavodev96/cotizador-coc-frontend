@@ -47,6 +47,7 @@
       <SidebarLink v-if="canAccessRolesPermisosConfig" label="Roles y permisos" link="/configuracion/roles-permisos" />
       <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
+      <SidebarLink v-if="hasPermission('integraciones.salesforce.ver_logs') || isSuperAdmin" label="Integración Salesforce" link="/configuracion/integraciones-salesforce" />
     </div>
 
     <!-- Cerrar sesión - Siempre visible -->

@@ -13,7 +13,7 @@ const mainPipelines = [
   {
     key: 'all',
     title: 'Sincronización completa',
-    description: 'Ejecuta Informix base, procedimientos, insumos y lentes en una sola corrida.',
+    description: 'Ejecuta Informix base, procedimientos, insumos, lentes y pacientes en una sola corrida.',
   },
   {
     key: 'sync_informix',
