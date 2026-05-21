@@ -3,9 +3,10 @@ definePageMeta({
   middleware: ['sanctum:auth'],
 });
 
-import { Notivue, Notification, filledIcons } from 'notivue'
+import { Notivue, Notification, filledIcons, push } from 'notivue'
 import tippy from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
+import { PDFDocument } from 'pdf-lib'
 
 const route = useRoute()
 const cotizacion = ref(null)
@@ -75,9 +76,12 @@ onMounted(async () => {
 })
 
 const pushNotification = (type, message, title) => {
-  push[type]({
-    title: title,
-    message: message,
+  const notification = typeof type === 'object' ? type : { type, message, title }
+  const notify = push[notification.type] || push.error
+
+  notify({
+    title: notification.title,
+    message: notification.message,
     ariaRole: 'alert'
   })
 }
@@ -315,6 +319,8 @@ const getConceptoLabel = (concepto, connom) => {
 
   if (c === 'DP' || /DERECHOS/i.test(name)) return 'DP - Derechos Clínicos';
   if (c === 'HANQ' || /ANEST/i.test(name)) return 'HANQ - Honorarios Anestesiologo';
+  if (c === 'HMLA' || /HONORARIOS/i.test(name)) return 'HMLA - Honorarios Medicos Laser';
+  if (c === 'LASH' || /LASER/i.test(name)) return 'LASH - Derechos Clínicos';
   if (!c || c === 'SIN_CONCEPTO') return 'HM - Honorarios Médicos';
   return `${c} - ${name || 'Sin nombre'}`;
 };
@@ -374,68 +380,127 @@ const applySinglePageScale = () => {
   }
 }
 
+const renderContentCanvas = async (html2canvas) => {
+  const el = contentRef.value
+  const originalBackground = el.style.backgroundColor
+
+  // El fondo transparente permite que la plantilla PDF siga siendo visible.
+  el.style.backgroundColor = 'transparent'
+
+  try {
+    return await html2canvas(el, {
+      scale: 3,
+      useCORS: true,
+      logging: false,
+      backgroundColor: null
+    })
+  } finally {
+    el.style.backgroundColor = originalBackground
+  }
+}
+
+const createCanvasSlice = (canvas, sourceY, sourceHeight) => {
+  const slice = document.createElement('canvas')
+  slice.width = canvas.width
+  slice.height = sourceHeight
+
+  const context = slice.getContext('2d')
+  context.drawImage(
+    canvas,
+    0,
+    sourceY,
+    canvas.width,
+    sourceHeight,
+    0,
+    0,
+    canvas.width,
+    sourceHeight
+  )
+
+  return slice
+}
+
+const buildPdfOnTemplate = async (html2canvas) => {
+  const canvas = await renderContentCanvas(html2canvas)
+  const templateResponse = await fetch('/report-template.pdf')
+
+  if (!templateResponse.ok) {
+    throw new Error('No se pudo cargar la plantilla report-template.pdf')
+  }
+
+  const templateBytes = await templateResponse.arrayBuffer()
+  const templatePdf = await PDFDocument.load(templateBytes)
+  const pdfDoc = await PDFDocument.create()
+  const [firstTemplatePage] = await pdfDoc.copyPages(templatePdf, [0])
+  const pageWidth = firstTemplatePage.getWidth()
+  const pageHeight = firstTemplatePage.getHeight()
+
+  const marginX = 28
+  const marginTop = 112
+  const marginBottom = 58
+  const drawWidth = pageWidth - (marginX * 2)
+  const drawAreaHeight = pageHeight - marginTop - marginBottom
+  const sliceHeightPx = Math.floor((canvas.width * drawAreaHeight) / drawWidth)
+
+  let sourceY = 0
+
+  while (sourceY < canvas.height) {
+    const currentSliceHeight = Math.min(sliceHeightPx, canvas.height - sourceY)
+    const pageSlice = createCanvasSlice(canvas, sourceY, currentSliceHeight)
+    const pageImage = await pdfDoc.embedPng(pageSlice.toDataURL('image/png'))
+    const drawHeight = (currentSliceHeight * drawWidth) / canvas.width
+    const [page] = await pdfDoc.copyPages(templatePdf, [0])
+
+    pdfDoc.addPage(page)
+    page.drawImage(pageImage, {
+      x: marginX,
+      y: pageHeight - marginTop - drawHeight,
+      width: drawWidth,
+      height: drawHeight
+    })
+
+    sourceY += currentSliceHeight
+  }
+
+  return await pdfDoc.save()
+}
+
 const imprimirPDF = async () => {
   if (process.client) {
     loadingImprimir.value = true;
 
-    const html2pdf = (await import('html2pdf.js')).default;
+    try {
+      const html2canvas = (await import('html2canvas')).default;
 
-    if (contentRef.value && cotizacion.value) {
-      const restoreScale = applySinglePageScale()
+      if (contentRef.value && cotizacion.value) {
+        const pdfBytes = await buildPdfOnTemplate(html2canvas)
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const printWindow = window.open(url);
+        if (printWindow) {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        }
+        
+        
+        // Cargar y agregar la plantilla PDF como fondo
+        
+        
+        // Convertir la página de la plantilla a imagen
+        
 
-      const options = {
-        margin: [0, 0, 0, 0],
-        image: { type: 'png', quality: 1.0 },
-        html2canvas: { scale: 4, logging: false, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] }
-      };
+        // Posicionar el contenido con márgenes apropiados
+        
 
-      html2pdf()
-        .set(options)
-        .from(contentRef.value)
-        .toPdf()
-        .get('pdf')
-        .then(pdf => {
-          const pageCount = pdf.internal.getNumberOfPages();
-
-          // === FOOTER PÁGINAS ===
-          for (let i = 1; i <= pageCount; i++) {
-            pdf.setPage(i);
-
-            const y = pdf.internal.pageSize.height - 15;
-            const x = 10;
-            const pageWidth = pdf.internal.pageSize.width;
-            const rightMargin = 10;
-
-            pdf.setFontSize(8);
-            pdf.setLineWidth(0.2);
-            pdf.line(x, y - 5, pageWidth - rightMargin, y - 5);
-
-            pdf.text('Sede principal Cra 47 # 8c-94 | PBX: (602) 511 02 00', x, y);
-            pdf.text('Cali - Colombia', x, y + 3);
-
-            pdf.text(`Página ${i} de ${pageCount}`, pageWidth - rightMargin, y + 3, { align: 'right' });
-          }
-
-          // Convertir a blob y abrir ventana de impresión
-          const pdfBlob = pdf.output('blob');
-          const url = URL.createObjectURL(pdfBlob);
-
-          const printWindow = window.open(url);
-          if (printWindow) {
-            setTimeout(() => {
-              printWindow.print();
-            }, 500);
-          }
-        })
-        .finally(() => {
-          restoreScale();
-          loadingImprimir.value = false;
-        });
-
-    } else {
-      console.error("No se encontró el contenido o la cotización.");
+        // Abrir en ventana de impresión
+      } else {
+        console.error("No se encontró el contenido o la cotización.");
+      }
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      pushNotification('error', 'Error al generar el PDF.');
+    } finally {
       loadingImprimir.value = false;
     }
   }
@@ -443,64 +508,31 @@ const imprimirPDF = async () => {
 
 const descargarPDF = async () => {
   if (process.client) {
-
     loadingDescargar.value = true;
-    // Importación dinámica (Client-Only)
-    const html2pdf = (await import('html2pdf.js')).default;
 
-    if (contentRef.value && cotizacion.value) {
-      const restoreScale = applySinglePageScale()
+    try {
+      const html2canvas = (await import('html2canvas')).default;
 
-      const options = {
-        margin: [0, 0, 0, 0],
-        filename: `Cotizacion_${cotizacion.value.codigo || 'nueva'}.pdf`,
-        image: { type: 'png', quality: 1.0 },
-        putOnlyUsedFonts: true,
-        html2canvas: {
-          scale: 4,
-          logging: false,
-          useCORS: true
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] }
-      };
+      if (contentRef.value && cotizacion.value) {
+        const pdfBytes = await buildPdfOnTemplate(html2canvas)
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
 
-      html2pdf().set(options).from(contentRef.value)
-        .toPdf().get('pdf').then(function (pdf) {
+        link.href = url
+        link.download = `Cotizacion_${cotizacion.value.codigo || 'nueva'}.pdf`
+        link.click()
+        URL.revokeObjectURL(url)
+        
 
-          const pageCount = pdf.internal.getNumberOfPages();
-
-          for (let i = 1; i <= pageCount; i++) {
-            pdf.setPage(i);
-
-            const y = pdf.internal.pageSize.height - 15;
-            const x = 10;
-            const pageWidth = pdf.internal.pageSize.width;
-            const rightMargin = 10;
-
-            pdf.setFontSize(8);
-
-            pdf.setLineWidth(0.2);
-            pdf.line(x, y - 5, pageWidth - rightMargin, y - 5);
-
-            const footerText1 = 'Sede principal Cra 47 # 8c-94 | PBX: (602) 511 02 00';
-            const footerText2 = 'Cali - Colombia';
-
-            pdf.text(footerText1, x, y);
-            pdf.text(footerText2, x, y + 3);
-
-            const pageNumText = `Página ${i} de ${pageCount}`;
-            pdf.text(pageNumText, pageWidth - rightMargin, y + 3, { align: 'right' });
-          }
-        })
-        .save()
-        .finally(() => {
-          restoreScale()
-          loadingDescargar.value = false;
-        });
-
-    } else {
-      console.error("No se encontró la referencia al contenido o los datos de la cotización.");
+        // Posicionar el contenido con márgenes apropiados
+      } else {
+        console.error("No se encontró el contenido o la cotización.");
+      }
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      pushNotification('error', 'Error al generar el PDF.');
+    } finally {
       loadingDescargar.value = false;
     }
   }
@@ -532,90 +564,79 @@ const descargarPDF = async () => {
     </div>
   </div>
   <div v-show="!loading">
-    <div class="py-6 px-6 bg-white text-black max-w-5xl mx-auto" ref="contentRef">
-      <!-- Encabezado -->
-      <div class="flex justify-between items-start mb-2">
-        <div>
-          <img src="/img/logo_clinica_oftalmologia.png" alt="clinicaofta" class="h-16 mb-4" />
-          <p>Santiago de Cali, {{ fechaHoraCreacion }}</p>
-        </div>
-        <div class="text-right">
-          <p><strong>{{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} N°:</strong> {{
-            cotizacion?.codigo }}</p>
-          <p><strong>Médico:</strong> {{ cotizacion?.medico?.nombre }}</p>
-          <p><strong>Entidad:</strong> <span class="text-[12px]">{{ cotizacion?.entidad?.nombre }}</span> </p>
-          <template v-if="esCodificacion">
-            <p><strong>Fecha autorización:</strong> {{ fechaAutorizacion }}</p>
-            <p><strong>Fecha vigencia:</strong> {{ fechaVigenciaCodificacion }}</p>
-          </template>
-        </div>
-      </div>
-      <hr class="mb-2" />
+    <div class="bg-white text-black p-6 text-sm" ref="contentRef" style="width: 210mm; height: auto; margin: 0 auto; font-family: Arial, sans-serif;">
       <!-- Datos del paciente -->
-      <div class="grid grid-cols-2 gap-6 mb-4">
+      <div class="grid grid-cols-2 gap-6 mb-4" style="font-size: 12px; line-height: 1.4;">
         <div>
-          <p><strong>Paciente:</strong> {{ cotizacion?.paciente?.nombre_completo }}</p>
-          <p><strong>Número de Documento:</strong> {{ cotizacion?.paciente?.numero_identificacion }}</p>
-          <p><strong>Correo:</strong> {{ cotizacion?.paciente?.correo }}</p>
+          <p style="margin: 2px 0;"><strong>Paciente:</strong> {{ cotizacion?.paciente?.nombre_completo }}</p>
+          <p style="margin: 2px 0;"><strong>Tipo de Documento:</strong> {{ cotizacion?.paciente?.tipo_identificacion }}</p>
+          <p style="margin: 2px 0;"><strong>Número de Documento:</strong> {{ cotizacion?.paciente?.numero_identificacion }}</p>
+          <p style="margin: 2px 0;"><strong>Correo:</strong> {{ cotizacion?.paciente?.correo }}</p>
+          <p style="margin: 2px 0;"><strong>Teléfono:</strong> {{ cotizacion?.paciente?.telefono }}</p>
         </div>
         <div>
-          <p><strong>Tipo de Documento:</strong> {{ cotizacion?.paciente?.tipo_identificacion }}</p>
-          <p><strong>Teléfono:</strong> {{ cotizacion?.paciente?.telefono }}</p>
+          
+          
+          <p style="margin: 2px 0;"><strong>Fecha de Creación:</strong> {{ fechaHoraCreacion }}</p>
+          <p style="margin: 2px 0;"><strong>Médico:</strong> {{ cotizacion?.medico?.nombre }}</p>
+          <p style="margin: 2px 0;"><strong>Entidad:</strong> {{ cotizacion?.entidad?.nombre }}</p>
+          <p style="margin: 2px 0;" v-if="esCodificacion"><strong>Fecha de Autorización:</strong> {{ fechaAutorizacion }}</p>
+          <p style="margin: 2px 0;" v-if="esCodificacion"><strong>Fecha de Vigencia:</strong> {{ fechaVigenciaCodificacion }}</p>
         </div>
       </div>
       <hr class="mb-4" />
       <template v-if="esCodificacion && modoPaciente">
-        <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-4">
-          <thead class="bg-[#172983] text-white">
+        <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">PROCEDIMIENTO</h2>
+        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+          <thead class="bg-[#1570b1] text-white">
             <tr>
-              <th class="border px-2 py-2 text-sm">CUPS</th>
-              <th class="border px-2 py-2">Nombre</th>
-              <th class="border px-2 py-2">Lateralidad</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">CUPS</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, idx) in procedimientosPaciente" :key="`paciente-codif-${idx}`">
-              <td class="border px-2 py-2">{{ item.codigo }}</td>
-              <td class="border px-2 py-2">{{ item.nombre }}</td>
-              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
+              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
             </tr>
           </tbody>
         </table>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
           <div>
-            <h2 class="text-base font-bold mb-2">VALORES DE CODIFICACIÓN</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">VALORES DE CODIFICACIÓN</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px;">
               <tbody>
                 <tr>
-                  <td class="border px-2 py-2 font-semibold bg-gray-50">Copago</td>
-                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.copago) }}</td>
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Copago</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.copago) }}</td>
                 </tr>
                 <tr>
-                  <td class="border px-2 py-2 font-semibold bg-gray-50">Excedente tope</td>
-                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Excedente tope</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
                 </tr>
                 <tr>
-                  <td class="border px-2 py-2 font-semibold bg-gray-50">Lente</td>
-                  <td class="border px-2 py-2 text-right">{{ formatMoney(valorLentesCodificacion) }}</td>
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Lente</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(valorLentesCodificacion) }}</td>
                 </tr>
                 <tr>
-                  <td class="border px-2 py-2 font-semibold bg-gray-50">Preanestesia</td>
-                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Preanestesia</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
                 </tr>
                 <tr>
-                  <td class="border px-2 py-2 font-semibold bg-gray-50">Otros</td>
-                  <td class="border px-2 py-2 text-right">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Otros</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <div>
-            <h2 class="text-base font-bold mb-2">OBSERVACIONES</h2>
-            <div class="border border-gray-400 rounded-sm p-3 min-h-[190px]">
-              <p class="text-sm whitespace-pre-line">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">OBSERVACIONES</h2>
+            <div class="border border-gray-400 rounded-sm p-3" style="border: 1px solid #ccc; padding: 8px; min-height: 120px; font-size: 11px;">
+              <p style="white-space: pre-line; margin: 0;">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
             </div>
           </div>
         </div>
@@ -624,54 +645,54 @@ const descargarPDF = async () => {
       <template v-else>
         <!-- Procedimientos -->
         <!-- HANQ, DP, null -->
-        <h2 class="text-base font-bold mb-2">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-          <thead class="bg-[#172983] text-white">
+        <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">PROCEDIMIENTO</h2>
+        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+          <thead class="bg-[#1570b1] text-white">
             <tr>
-              <th class="border px-2 py-2 text-sm">CUPS</th>
-              <th class="border px-2 py-2">Nombre</th>
-              <th class="border px-2 py-2">Lateralidad</th>
-              <th v-if="!modoConsulta" class="border px-2 py-2 text-right">Valor</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">CUPS</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+              <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
+              <th v-if="!modoConsulta" class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
             </tr>
           </thead>
           <tbody>
             <!-- Modo consulta: mostrar agrupado sin valores -->
             <tr v-if="modoConsulta" v-for="(item, idx) in itemsAgrupados" :key="`consulta-${idx}`">
-              <td class="border px-2 py-2">{{ item.codigo }}</td>
-              <td class="border px-2 py-2">{{ item.nombre }}</td>
-              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
+              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
             </tr>
             <!-- Modo privado: mostrar agrupado con valores -->
             <tr v-else-if="modoPaciente" v-for="(item, idx) in itemsAgrupados" :key="`privado-${idx}`">
-              <td class="border px-2 py-2">{{ item.codigo }}</td>
-              <td class="border px-2 py-2">{{ item.nombre }}</td>
-              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
-              <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
+              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(item.valor) }}</td>
             </tr>
             <!-- Modo normal: mostrar todos los items con valores -->
             <tr v-else v-for="(item, idx) in cotizacion?.items" :key="`normal-${idx}`">
-              <td class="border px-2 py-2">{{ item.codigo }}</td>
-              <td class="border px-2 py-2">{{ item.nombre }}</td>
-              <td class="border px-2 py-2">{{ item.lateralidad }}</td>
-              <td class="border px-2 py-2 text-right">{{ formatMoney(item.valor) }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
+              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
+              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
+              <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(item.valor) }}</td>
             </tr>
           </tbody>
         </table>
 
         <!-- Agrupado por concepto (mostrar en modo normal y modo consulta) -->
         <div v-if="!modoPaciente || modoConsulta">
-          <h2 class="text-base font-bold mb-2">AGRUPADO POR CONCEPTO</h2>
-          <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-            <thead class="bg-[#172983] text-white">
+          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">AGRUPADO POR CONCEPTO</h2>
+          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+            <thead class="bg-[#1570b1] text-white">
               <tr>
-                <th class="border px-2 py-2">Concepto</th>
-                <th class="border px-2 py-2 text-right">Valor Total</th>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Concepto</th>
+                <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="c in agrupadoPorConcepto" :key="c.concepto">
-                <td class="border px-2 py-2">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
-                <td class="border px-2 py-2 text-right">{{ formatMoney(c.total) }}</td>
+                <td class="border px-2 py-1" style="padding: 4px;">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
+                <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(c.total) }}</td>
               </tr>
             </tbody>
           </table>
@@ -679,20 +700,21 @@ const descargarPDF = async () => {
         <div v-if="modoPacienteResumen && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
           <!-- Insumos (agregados con valores) -->
           <template v-if="detallesAgrupados.insumos.length > 0">
-            <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Descripción</th>
-                  <th class="border px-2 py-2 text-center">Cantidad Total</th>
-                  <th class="border px-2 py-2 text-right">Valor Total</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad Total</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td class="border border-gray-400 px-2 py-2 font-semibold">Insumos</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadInsumos }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Insumos</td>
+                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Insumos</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{ totalCantidadInsumos }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
                     {{ formatMoney(totalInsumos) }}
                   </td>
                 </tr>
@@ -702,20 +724,20 @@ const descargarPDF = async () => {
 
           <!-- Lentes (agregados con valores) -->
           <template v-if="detallesAgrupados.lentes.length > 0">
-            <h2 class="text-base font-bold mb-2">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Descripción</th>
-                  <th class="border px-2 py-2 text-center">Cantidad Total</th>
-                  <th class="border px-2 py-2 text-right">Valor Total</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad Total</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td class="border border-gray-400 px-2 py-2 font-semibold">Lentes</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center font-semibold">{{ totalCantidadLentes }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right font-semibold">
+                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Lentes</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{ totalCantidadLentes }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
                     {{ formatMoney(totalLentes) }}
                   </td>
                 </tr>
@@ -726,44 +748,44 @@ const descargarPDF = async () => {
 
         <div v-if="(modoPacienteDetallado || modoConsulta) && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
-            <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Código</th>
-                  <th class="border px-2 py-2">Nombre</th>
-                  <th class="border px-2 py-2 text-center">Cantidad</th>
-                  <th class="border px-2 py-2 text-right">Valor</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="detalle in detallesDesglosados.insumos" :key="`pac-det-ins-${detalle.id || detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
           </template>
 
           <template v-if="detallesDesglosados.lentes.length > 0">
-            <h2 class="text-base font-bold mb-2">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Código</th>
-                  <th class="border px-2 py-2">Nombre</th>
-                  <th class="border px-2 py-2 text-center">Cantidad</th>
-                  <th class="border px-2 py-2 text-right">Valor</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="detalle in detallesDesglosados.lentes" :key="`pac-det-len-${detalle.id || detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -773,51 +795,51 @@ const descargarPDF = async () => {
         <!-- Insumos y Lentes detallados (modo normal) -->
         <div v-if="!modoPaciente && !modoConsulta && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
-            <h2 class="text-base font-bold mb-2">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Código</th>
-                  <th class="border px-2 py-2">Nombre</th>
-                  <th class="border px-2 py-2 text-center">Cantidad</th>
-                  <th class="border px-2 py-2 text-right">Valor</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="detalle in detallesDesglosados.insumos" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
           </template>
 
           <template v-if="detallesDesglosados.lentes.length > 0">
-            <h2 class="text-base font-bold mb-2">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400 text-sm mb-6">
-              <thead class="bg-[#172983] text-white">
+            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+              <thead class="bg-[#1570b1] text-white">
                 <tr>
-                  <th class="border px-2 py-2">Código</th>
-                  <th class="border px-2 py-2">Nombre</th>
-                  <th class="border px-2 py-2 text-center">Cantidad</th>
-                  <th class="border px-2 py-2 text-right">Valor</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
+                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="detalle in detallesDesglosados.lentes" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-2">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-center">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-2 text-right">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
           </template>
         </div>
       </template>
-      <p class="text-right font-bold mb-4">
+      <p style="text-align: right; font-weight: bold; margin-bottom: 16px; font-size: 12px;">
         {{ esCodificacion ? 'VALOR TOTAL:' : 'VALOR TOTAL DEL PROCEDIMIENTO:' }} {{ formatMoney(totalMostrado) }}
       </p>
 
@@ -838,20 +860,22 @@ const descargarPDF = async () => {
         <p class="text-sm">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
       </div>
 
+      <div>
+        <strong>Asesor:</strong> {{ cotizacion?.asesor.name }}
+        <br>
+        <strong>SAI:</strong> 315 6671052
+        <br>
+        <strong>Correo SAI: </strong> {{ cotizacion?.asesor.email }}
+      </div>
+
       <!-- Inclusiones -->
       <!-- <div class="mb-8">
       <h2 class="text-lg font-bold">Inclusiones</h2>
       <p>{{ cotizacion?.inclusiones || 'Ninguna' }}</p>
     </div> -->
-      <!-- Pie de página -->
-      <div class="flex flex-col items-start leading-none mt-10 text-sm text-gray-700">
-        <p class="mb-1 font-semibold text-xl">{{ cotizacion?.asesor?.name }}</p>
-        <p>Asesor barra SAI</p>
-        <p>Email: {{ cotizacion?.asesor?.email }}</p>
-      </div>
     </div>
 
-    <div class="py-6 px-6 bg-white text-black max-w-5xl mx-auto">
+    <div class="mt-2 py-6 px-6 bg-white text-black max-w-5xl mx-auto">
       <div v-if="esCodificacion" class="inline-flex items-center gap-3">
         <button class="px-4 py-2 rounded text-white" :class="modoPaciente ? 'bg-[#162983]' : 'bg-gray-500'"
           @click="toggleImprimirPaciente" :disabled="modoConsulta">
