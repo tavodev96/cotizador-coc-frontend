@@ -7,7 +7,7 @@ definePageMeta({
 })
 
 const route = useRoute()
-const { hasPermission } = useUserPermissions()
+const { hasPermission, ensureUserPermissions } = useUserPermissions()
 
 const loading = ref(true)
 const statsLoading = ref(false)
@@ -234,6 +234,8 @@ let dashboardPollInterval: number | null = null
 let logsPollInterval: number | null = null
 
 onMounted(async () => {
+  await ensureUserPermissions()
+
   if (!canViewLogs.value) {
     console.warn('No permission to view Salesforce logs')
     loading.value = false
