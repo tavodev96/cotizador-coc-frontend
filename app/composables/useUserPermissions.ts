@@ -38,12 +38,22 @@ export const useUserPermissions = () => {
       }
 
       // Actualizar el usuario con los nuevos datos que incluyen permisos y roles
-      if (data.value && user.value) {
-        // Asignar permisos y roles al usuario
-        Object.assign(user.value, {
-          permissions: data.value.permissions || [],
-          roles: data.value.roles || []
-        })
+      if (data.value) {
+        const permissions = data.value.permissions || []
+        const roles = data.value.roles || []
+
+        if (user.value) {
+          Object.assign(user.value, {
+            permissions,
+            roles
+          })
+        } else {
+          user.value = {
+            ...data.value,
+            permissions,
+            roles
+          }
+        }
 
         permissionsLoaded.value = true
         return true
