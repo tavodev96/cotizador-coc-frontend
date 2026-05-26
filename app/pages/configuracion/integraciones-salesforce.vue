@@ -7,7 +7,7 @@ definePageMeta({
 })
 
 const route = useRoute()
-const { hasPermission, ensureUserPermissions } = useUserPermissions()
+const { hasPermission, hasRole, ensureUserPermissions } = useUserPermissions()
 
 const loading = ref(true)
 const statsLoading = ref(false)
@@ -36,7 +36,11 @@ const filters = ref({
 
 const errorCodes = ref<string[]>([])
 
-const canViewLogs = computed(() => hasPermission('integraciones.salesforce.ver_logs'))
+const canViewLogs = computed(() =>
+  hasPermission('integraciones.salesforce.ver_logs') ||
+  hasRole('superadmin') ||
+  hasRole('Superadmin')
+)
 const canRetry = computed(() => hasPermission('integraciones.salesforce.reintento'))
 
 const pushNotification = (type: string, message: string, title: string) => {
@@ -234,7 +238,10 @@ let dashboardPollInterval: number | null = null
 let logsPollInterval: number | null = null
 
 onMounted(async () => {
-  await ensureUserPermissions()
+  const refreshed = await ensureUserPermissions(true)
+  if (!refreshed) {
+    console.warn('Failed to refresh user permissions before loading Salesforce logs')
+  }
 
   if (!canViewLogs.value) {
     console.warn('No permission to view Salesforce logs')
