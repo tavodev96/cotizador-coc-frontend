@@ -68,8 +68,8 @@ export const useUserPermissions = () => {
     }
   }
 
-  const ensureUserPermissions = async () => {
-    return refreshUserPermissions(false)
+  const ensureUserPermissions = async (force = false) => {
+    return refreshUserPermissions(force)
   }
 
   /**
