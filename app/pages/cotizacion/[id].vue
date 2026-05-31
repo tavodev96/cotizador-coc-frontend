@@ -13,7 +13,10 @@ const fileUrl = (path) => `${apiBase}/storage/${path}`
 
 const cotizacion = ref(null)
 const estadosAdministrativos = ref([]);
+const estadosGestion = ref([])
 const estadoSeleccionado = ref(null)
+const estadoGestionSeleccionado = ref(null)
+const comentarioEstadoGestion = ref('')
 const nuevoComentario = ref('')
 const archivos = ref([])
 const historico_estados = ref([])
@@ -21,6 +24,7 @@ const mostrarModalHistorico = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
+const loadingEstadoGestion = ref(false)
 const savingPriority = ref(false)
 const syncingSalesforce = ref(false)
 const lastSalesforceLog = ref(null)
@@ -54,9 +58,12 @@ const fetchDetalle = async () => {
 
     // Asignar los datos con un pequeño delay para asegurar reactividad
     cotizacion.value = { ...data.value.cotizacion }
+    lastSalesforceLog.value = data.value.cotizacion.salesforce_last_log || null
     historico_estados.value = [...data.value.estados]
+    estadosGestion.value = Array.isArray(data.value.estados_gestion) ? data.value.estados_gestion : []
     estadoSeleccionado.value = cotizacion.value.estado_id
     estadoSeleccionadoTemp.value = cotizacion.value.estado_id
+    estadoGestionSeleccionado.value = cotizacion.value.estado_gestion_id || ''
     fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_programada)
 
   } catch (err) {
@@ -197,6 +204,41 @@ const agregarComentario = async () => {
   }
 }
 
+const cambiarEstadoGestion = async () => {
+  if (!estadoGestionSeleccionado.value || loadingEstadoGestion.value) return
+
+  loadingEstadoGestion.value = true
+
+  try {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado-gestion`, {
+      method: 'PUT',
+      body: {
+        estado_gestion_id: estadoGestionSeleccionado.value,
+        comentario: comentarioEstadoGestion.value?.trim() || null,
+      }
+    })
+
+    if (error.value || !data.value?.success) {
+      pushNotification('error', 'No se pudo actualizar el estado de gestión', 'Error')
+      return
+    }
+
+    cotizacion.value = {
+      ...cotizacion.value,
+      estado_gestion_id: data.value.cotizacion?.estado_gestion_id ?? estadoGestionSeleccionado.value,
+      estado_gestion: data.value.cotizacion?.estado_gestion ?? cotizacion.value.estado_gestion,
+      historial_estado_gestion: data.value.historial_estado_gestion ?? cotizacion.value.historial_estado_gestion,
+    }
+    comentarioEstadoGestion.value = ''
+    pushNotification('success', 'Estado de gestión actualizado', 'Éxito')
+  } catch (error) {
+    console.error('Error al actualizar estado de gestión:', error)
+    pushNotification('error', 'No se pudo actualizar el estado de gestión', 'Error')
+  } finally {
+    loadingEstadoGestion.value = false
+  }
+}
+
 const realizarCambioEstado = async (estadoId, options = {}) => {
   try {
     loadingEstados.value = true
@@ -318,20 +360,39 @@ onMounted(async () => {
 const formatoFecha = (fechaISO) => {
   if (!fechaISO) return '';
 
+  const fechaTexto = String(fechaISO);
+  const fechaSimple = fechaTexto.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+
+  if (fechaSimple && cotizacion.value?.codificacion) {
+    return `${fechaSimple[3]}/${fechaSimple[2]}/${fechaSimple[1]}`;
+  }
+
   const fecha = new Date(fechaISO);
+  if (Number.isNaN(fecha.getTime())) return '';
 
-  const dia = String(fecha.getDate()).padStart(2, '0');
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-  const anio = fecha.getFullYear();
+  const opciones = {
+    timeZone: 'America/Bogota'
+  };
 
-  const horas = String(fecha.getHours()).padStart(2, '0');
-  const minutos = String(fecha.getMinutes()).padStart(2, '0');
+  const fechaFormateada = new Intl.DateTimeFormat('es-CO', {
+    ...opciones,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(fecha);
 
   if (!cotizacion.value?.codificacion) {
-    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
-  } else {
-    return `${dia}/${mes}/${anio}`;
+    const horaFormateada = new Intl.DateTimeFormat('es-CO', {
+      ...opciones,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(fecha);
+
+    return `${fechaFormateada} ${horaFormateada}`;
   }
+
+  return fechaFormateada;
 }
 
 const formatearNumero = (valor, decimals = 2) => {
@@ -349,6 +410,13 @@ const formatearNumero = (valor, decimals = 2) => {
     style: 'decimal'
   }).format(numero);
 };
+
+const formatearNumeroSinDecimales = (valor) => formatearNumero(valor, 0);
+
+const lenteBaseCodificacion = computed(() => Number(cotizacion.value?.codificacion?.lente ?? 0))
+const auxilioLenteCodificacion = computed(() => Number(cotizacion.value?.codificacion?.auxilio_lente ?? 0))
+const lenteNetoCodificacion = computed(() => Math.max(lenteBaseCodificacion.value - auxilioLenteCodificacion.value, 0))
+const insumosCodificacion = computed(() => Number(cotizacion.value?.codificacion?.insumos ?? 0))
 
 const totalConDetalles = computed(() => {
   if (!cotizacion.value) return 0
@@ -424,9 +492,22 @@ const fechaAutorizacionFormateada = computed(() => {
         <h2 class="text-2xl font-semibold text-slate-900"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
           cotizacion?.codigo }}</h2>
         <p class="text-slate-700"><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
+        <p class="text-slate-700"><span class="font-bold">Entidad:</span> {{ cotizacion?.paciente?.entidad?.nombre || 'N/A' }}</p>
         <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
+        <p class="text-slate-700"><span class="font-bold">Salesforce:</span>
+          <span :class="{
+            'text-emerald-700': cotizacion?.salesforce_status === 'success',
+            'text-amber-700': cotizacion?.salesforce_status === 'queued',
+            'text-rose-700': cotizacion?.salesforce_status === 'error',
+            'text-slate-700': !cotizacion?.salesforce_status || cotizacion?.salesforce_status === 'not_sent'
+          }">
+            {{ cotizacion?.salesforce_status === 'success' ? 'Enviada' : cotizacion?.salesforce_status === 'queued' ? 'Encolada' : cotizacion?.salesforce_status === 'error' ? 'Error' : 'No enviada' }}
+          </span>
+        </p>
         <p class="text-slate-700"><span class="font-bold">Estado:</span> <span
             class="bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.estado.nombre }}</span></p>
+        <p class="text-slate-700"><span class="font-bold">Estado de gestión:</span> <span
+            class="bg-sky-100 text-sky-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.estado_gestion?.nombre || 'Sin gestión' }}</span></p>
         <p v-if="cotizacion?.es_prioritaria" class="text-slate-700">
           <span class="font-bold">Prioridad:</span>
           <span class="bg-rose-100 text-rose-700 rounded-full px-2.5 py-1 text-sm font-semibold">Prioritaria</span>
@@ -540,31 +621,43 @@ const fechaAutorizacionFormateada = computed(() => {
               <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
               <path fill="#1E9C07"
                 d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
-            </svg> Copago: {{ formatearNumero(cotizacion?.codificacion.copago) }}</li>
+            </svg> Copago: {{ formatearNumeroSinDecimales(cotizacion?.codificacion.copago) }}</li>
           <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
               <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
               <path fill="#1E9C07"
                 d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
-            </svg>excedente tope: {{ formatearNumero(cotizacion?.codificacion.excedente_tope) }}</li>
+            </svg>excedente tope: {{ formatearNumeroSinDecimales(cotizacion?.codificacion.excedente_tope) }}</li>
           <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
               <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
               <path fill="#1E9C07"
                 d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
-            </svg>Lente: {{ formatearNumero(cotizacion?.codificacion.lente) }}</li>
+            </svg>Lente: {{ formatearNumeroSinDecimales(lenteNetoCodificacion) }}</li>
           <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
               <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
               <path fill="#1E9C07"
                 d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
-            </svg>Pre-Anestesia: {{ formatearNumero(cotizacion?.codificacion.pre_anestesia) }}</li>
+            </svg>Auxilio de lente: {{ formatearNumeroSinDecimales(auxilioLenteCodificacion) }}</li>
           <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
               <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
               <path fill="#1E9C07"
                 d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
-            </svg>Otros costos: {{ formatearNumero(cotizacion?.codificacion.otros_costos) }}</li>
+            </svg>Pre-Anestesia: {{ formatearNumeroSinDecimales(cotizacion?.codificacion.pre_anestesia) }}</li>
+          <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+              viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
+              <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
+              <path fill="#1E9C07"
+                d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
+            </svg>Otros costos: {{ formatearNumeroSinDecimales(cotizacion?.codificacion.otros_costos) }}</li>
+          <li class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+              viewBox="0 0 24 24"><!-- Icon from BoxIcons by Atisa - https://creativecommons.org/licenses/by/4.0/ -->
+              <path fill="#1E9C07" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8a8 8 0 0 1-8 8" />
+              <path fill="#1E9C07"
+                d="M12 11c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3" />
+            </svg>Insumos: {{ formatearNumeroSinDecimales(insumosCodificacion) }}</li>
           <li class="flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
               viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
@@ -638,6 +731,40 @@ const fechaAutorizacionFormateada = computed(() => {
 
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
     <h3 class="text-xl font-semibold text-slate-900 mb-4">Comentarios</h3>
+    <div class="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+      <div class="flex flex-col lg:flex-row lg:items-end gap-3">
+        <div class="flex-1">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Estado de gestión</label>
+          <select v-model="estadoGestionSeleccionado" class="w-full h-11 rounded-lg border border-slate-300 bg-white px-3">
+            <option value="">Sin estado de gestión</option>
+            <option v-for="estado in estadosGestion" :key="estado.id" :value="estado.id">
+              {{ estado.nombre }}
+            </option>
+          </select>
+        </div>
+        <div class="flex-[1.4]">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Comentario de trazabilidad</label>
+          <input v-model="comentarioEstadoGestion" class="w-full h-11 rounded-lg border border-slate-300 bg-white px-3" placeholder="Opcional" />
+        </div>
+        <button
+          class="h-11 rounded-lg bg-indigo-700 px-4 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
+          :disabled="loadingEstadoGestion || !estadoGestionSeleccionado"
+          @click="cambiarEstadoGestion"
+        >
+          {{ loadingEstadoGestion ? 'Guardando...' : 'Actualizar gestión' }}
+        </button>
+      </div>
+      <div v-if="cotizacion?.historial_estado_gestion?.length" class="mt-4 border-t border-indigo-100 pt-3 text-sm">
+        <p class="font-semibold text-slate-700">Trazabilidad de gestión</p>
+        <div v-for="log in cotizacion.historial_estado_gestion.slice(0, 5)" :key="log.id" class="mt-2 text-slate-700">
+          <b>{{ log.estado_anterior?.nombre || 'Sin estado' }}</b>
+          a
+          <b>{{ log.estado_nuevo?.nombre || 'Sin estado' }}</b>
+          por {{ log.usuario?.name || 'Sistema' }} - {{ formatoFecha(log.created_at) }}
+          <span v-if="log.comentario">: {{ log.comentario }}</span>
+        </div>
+      </div>
+    </div>
     <div v-for="com in cotizacion?.comentarios" :key="com.id" class="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50/60">
       <p><b>{{ com.usuario.name }} - {{ formatoFecha(com.created_at) }}</b>: {{ com.comentario }}</p>
       <div v-if="com.adjuntos.length > 0" class="mt-2">

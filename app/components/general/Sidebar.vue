@@ -45,6 +45,7 @@
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Configuración</p>
       <SidebarLink v-if="canAccessUsuariosConfig" label="Usuarios" link="/configuracion/usuarios" />
       <SidebarLink v-if="canAccessRolesPermisosConfig" label="Roles y permisos" link="/configuracion/roles-permisos" />
+      <SidebarLink v-if="hasPermission('configuracion.correo.ver') || isSuperAdmin" label="Correo" link="/configuracion/correo" />
       <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
       <SidebarLink v-if="hasPermission('integraciones.salesforce.ver_logs') || isSuperAdmin" label="Integración Salesforce" link="/configuracion/integraciones-salesforce" />
@@ -105,7 +106,7 @@ const canAccessCirugia = computed(() => {
 })
 
 const canAccessConfiguracion = computed(() => {
-  return isConfigAdmin.value || hasPermission('configuracion.errores.ver')
+  return isConfigAdmin.value || hasAnyPermission(['configuracion.errores.ver', 'configuracion.correo.ver'])
 })
 
 const canAccessUsuariosConfig = computed(() => {

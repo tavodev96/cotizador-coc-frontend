@@ -27,6 +27,7 @@ export const useCotizacionForm = () => {
     copago: '0',
     excedenteTope: '0',
     lentes: '0',
+    auxilioLente: '0',
     preAnestesia: '0',
     otros: '0',
     fechaVigencia: '',

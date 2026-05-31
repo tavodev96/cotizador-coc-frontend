@@ -87,17 +87,19 @@ onMounted(async () => {
         })(),
     }
 
-    // if (c.codificacion) {
-    //     codificacion.value = {
-    //         autorizacion: c.codificacion.numero_autorizacion,
-    //         copago: c.codificacion.copago,
-    //         excedenteTope: c.codificacion.excedente_tope,
-    //         lentes: c.codificacion.lente,
-    //         preAnestesia: c.codificacion.pre_anestesia,
-    //         otros: c.codificacion.otros_costos,
-    //         fechaVigencia: c.codificacion.fecha_vigencia,
-    //     }
-    // }
+    if (c.codificacion) {
+        codificacion.value = {
+            autorizacion: c.codificacion.numero_autorizacion ?? '',
+            copago: c.codificacion.copago ?? '0',
+            excedenteTope: c.codificacion.excedente_tope ?? '0',
+            lentes: c.codificacion.lente ?? '0',
+            auxilioLente: c.codificacion.auxilio_lente ?? '0',
+            preAnestesia: c.codificacion.pre_anestesia ?? '0',
+            otros: c.codificacion.otros_costos ?? '0',
+            fechaVigencia: c.codificacion.fecha_vigencia ?? '',
+            fechaAutorizacion: c.codificacion.fecha_autorizacion ?? '',
+        }
+    }
 
     loading.value = false
 })
