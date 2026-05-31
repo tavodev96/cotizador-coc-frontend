@@ -4,8 +4,6 @@ definePageMeta({
 });
 
 import { Notivue, Notification, filledIcons, push } from 'notivue'
-import tippy from 'tippy.js';
-import 'tippy.js/dist/tippy.css';
 import { PDFDocument } from 'pdf-lib'
 
 const route = useRoute()
@@ -14,6 +12,10 @@ const contentRef = ref(null)
 const loading = ref(true)
 const loadingDescargar = ref(false)
 const loadingImprimir = ref(false)
+const loadingCorreo = ref(false)
+const mostrarModalCorreo = ref(false)
+const correoDestino = ref('')
+const progresoCorreo = ref(0)
 const imprimirParaPaciente = ref(false)
 const imprimirParaPacienteDetallada = ref(false)
 
@@ -63,6 +65,7 @@ onMounted(async () => {
       console.error('Error fetching cotizacion:', error.value)
     } else {
       cotizacion.value = data.value.cotizacion
+      correoDestino.value = cotizacion.value?.paciente?.correo || ''
     }
   } catch (err) {
     pushNotification({
@@ -219,14 +222,13 @@ const totalLentes = computed(() => {
   return detallesAgrupados.value.lentes.reduce((sum, item) => sum + Number(item.valor_total || 0), 0);
 });
 
+const auxilioLenteCodificacion = computed(() => Number(cotizacion.value?.codificacion?.auxilio_lente ?? 0))
+
 const valorLentesCodificacion = computed(() => {
   const sumaLentesDetalle = Number(totalLentes.value || 0)
-  if (sumaLentesDetalle > 0) {
-    return sumaLentesDetalle
-  }
+  const baseLente = sumaLentesDetalle > 0 ? sumaLentesDetalle : Number(cotizacion.value?.codificacion?.lente ?? cotizacion.value?.codificacion?.lentes ?? 0)
 
-  const codificacion = cotizacion.value?.codificacion || {}
-  return Number(codificacion.lente ?? codificacion.lentes ?? 0)
+  return Math.max(baseLente - auxilioLenteCodificacion.value, 0)
 })
 
 const totalCantidadInsumos = computed(() => {
@@ -249,7 +251,8 @@ const totalBaseCodificacion = computed(() => {
     toNumber(codificacion.excedente_tope) +
     toNumber(valorLentesCodificacion.value) +
     toNumber(codificacion.pre_anestesia) +
-    toNumber(codificacion.otros_costos)
+    toNumber(codificacion.otros_costos) +
+    toNumber(codificacion.insumos)
   )
 })
 
@@ -269,20 +272,29 @@ const fechaHoraCreacion = computed(() => {
   const fecha = new Date(value)
   if (Number.isNaN(fecha.getTime())) return String(value)
 
-  // timeStyle: 'short',
   return new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
     dateStyle: 'long',
+    timeStyle: 'short'
   }).format(fecha)
 })
 
 const formatDate = (value) => {
   if (!value) return 'N/A'
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/)
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`
+  }
+
   const fecha = new Date(value)
   if (Number.isNaN(fecha.getTime())) return 'N/A'
-  const dia = String(fecha.getDate()).padStart(2, '0')
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
-  const anio = fecha.getFullYear()
-  return `${dia}/${mes}/${anio}`
+
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(fecha)
 }
 
 const fechaAutorizacion = computed(() => formatDate(cotizacion.value?.codificacion?.fecha_autorizacion))
@@ -465,6 +477,31 @@ const buildPdfOnTemplate = async (html2canvas) => {
   return await pdfDoc.save()
 }
 
+const buildPdfPacienteParaCorreo = async (html2canvas) => {
+  const estadoImpresion = {
+    imprimirParaPaciente: imprimirParaPaciente.value,
+    imprimirParaPacienteDetallada: imprimirParaPacienteDetallada.value,
+  }
+
+  if (esCodificacion.value) {
+    imprimirParaPaciente.value = true
+    imprimirParaPacienteDetallada.value = false
+  } else {
+    imprimirParaPaciente.value = false
+    imprimirParaPacienteDetallada.value = true
+  }
+
+  await nextTick()
+
+  try {
+    return await buildPdfOnTemplate(html2canvas)
+  } finally {
+    imprimirParaPaciente.value = estadoImpresion.imprimirParaPaciente
+    imprimirParaPacienteDetallada.value = estadoImpresion.imprimirParaPacienteDetallada
+    await nextTick()
+  }
+}
+
 const imprimirPDF = async () => {
   if (process.client) {
     loadingImprimir.value = true;
@@ -537,6 +574,60 @@ const descargarPDF = async () => {
     }
   }
 }
+
+const abrirModalCorreo = () => {
+  correoDestino.value = cotizacion.value?.paciente?.correo || ''
+  progresoCorreo.value = 0
+  mostrarModalCorreo.value = true
+}
+
+const enviarCorreo = async () => {
+  if (!correoDestino.value || loadingCorreo.value) return
+
+  loadingCorreo.value = true
+  progresoCorreo.value = 15
+
+  const timer = setInterval(() => {
+    progresoCorreo.value = Math.min(progresoCorreo.value + 10, 85)
+  }, 350)
+
+  try {
+    const html2canvas = (await import('html2canvas')).default
+    const pdfBytes = await buildPdfPacienteParaCorreo(html2canvas)
+    const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
+    const formData = new FormData()
+
+    formData.append('email', correoDestino.value)
+    formData.append('pdf', pdfBlob, `Propuesta_${cotizacion.value?.codigo || route.params.id}.pdf`)
+    progresoCorreo.value = 55
+
+    const { error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/enviar-correo`, {
+      method: 'POST',
+      body: formData,
+      headers: {},
+    })
+
+    if (error.value) {
+      progresoCorreo.value = 0
+      pushNotification('error', error.value?.data?.message || 'No se pudo enviar el correo.')
+      return
+    }
+
+    progresoCorreo.value = 100
+    pushNotification('success', 'Cotización enviada al correo indicado.', 'Enviado')
+    setTimeout(() => {
+      mostrarModalCorreo.value = false
+      progresoCorreo.value = 0
+    }, 600)
+  } catch (error) {
+    console.error('Error enviando correo:', error)
+    progresoCorreo.value = 0
+    pushNotification('error', 'No se pudo generar o enviar el PDF.')
+  } finally {
+    clearInterval(timer)
+    loadingCorreo.value = false
+  }
+}
 </script>
 
 <template>
@@ -604,6 +695,46 @@ const descargarPDF = async () => {
           </tbody>
         </table>
 
+        <template v-if="detallesDesglosados.insumos.length > 0">
+          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
+          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+            <thead class="bg-[#1570b1] text-white">
+              <tr>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(detalle, idx) in detallesDesglosados.insumos" :key="`paciente-insumo-${idx}`">
+                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ detalle.lateralidad || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <template v-if="detallesDesglosados.lentes.length > 0">
+          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
+          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+            <thead class="bg-[#1570b1] text-white">
+              <tr>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
+                <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(detalle, idx) in detallesDesglosados.lentes" :key="`paciente-lente-${idx}`">
+                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
+                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
+                <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ detalle.lateralidad || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
           <div>
             <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">VALORES DE CODIFICACIÓN</h2>
@@ -617,9 +748,13 @@ const descargarPDF = async () => {
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Excedente tope</td>
                   <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
                 </tr>
-                <tr>
+                <tr v-if="valorLentesCodificacion > 0">
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Lente</td>
                   <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(valorLentesCodificacion) }}</td>
+                </tr>
+                <tr v-if="auxilioLenteCodificacion > 0">
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Auxilio de lente</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(auxilioLenteCodificacion) }}</td>
                 </tr>
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Preanestesia</td>
@@ -628,6 +763,10 @@ const descargarPDF = async () => {
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Otros</td>
                   <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
+                </tr>
+                <tr v-if="Number(cotizacion?.codificacion?.insumos || 0) > 0">
+                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Insumos</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.insumos) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -839,7 +978,7 @@ const descargarPDF = async () => {
           </template>
         </div>
       </template>
-      <p style="text-align: right; font-weight: bold; margin-bottom: 16px; font-size: 12px;">
+      <p style="text-align: center; font-weight: bold; margin-bottom: 16px; font-size: 16px;">
         {{ esCodificacion ? 'VALOR TOTAL:' : 'VALOR TOTAL DEL PROCEDIMIENTO:' }} {{ formatMoney(totalMostrado) }}
       </p>
 
@@ -926,8 +1065,8 @@ const descargarPDF = async () => {
         <span v-if="loadingImprimir">Imprimiendo...</span>
         <span v-else>🖨 Imprimir</span>
       </button>
-      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded"
-        v-tippy="{ content: 'Muy pronto, estamos en construcción' }">
+      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded" @click="abrirModalCorreo"
+        >
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
           viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
           <path fill="currentColor"
@@ -954,6 +1093,39 @@ const descargarPDF = async () => {
           Generando PDF...
         </template>
       </button>
+    </div>
+
+    <div v-if="mostrarModalCorreo" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900">Enviar cotizacion por correo</h2>
+            <p class="mt-1 text-sm text-slate-600">Confirma el correo del paciente o corrigelo antes de enviar.</p>
+          </div>
+          <button class="text-xl text-slate-500 hover:text-slate-900" :disabled="loadingCorreo" @click="mostrarModalCorreo = false">x</button>
+        </div>
+
+        <label class="mt-4 block">
+          <span class="text-sm font-semibold text-slate-700">Correo destino</span>
+          <input v-model="correoDestino" type="email" class="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" />
+        </label>
+
+        <div v-if="loadingCorreo || progresoCorreo > 0" class="mt-4">
+          <div class="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full bg-emerald-600 transition-all" :style="{ width: `${progresoCorreo}%` }"></div>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">Enviando correo... {{ progresoCorreo }}%</p>
+        </div>
+
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="h-10 rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-700" :disabled="loadingCorreo" @click="mostrarModalCorreo = false">
+            Cancelar
+          </button>
+          <button class="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60" :disabled="loadingCorreo || !correoDestino" @click="enviarCorreo">
+            {{ loadingCorreo ? 'Enviando...' : 'Enviar a correo' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

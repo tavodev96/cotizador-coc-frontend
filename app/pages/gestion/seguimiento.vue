@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 definePageMeta({
   middleware: ['sanctum:auth'],
 });
@@ -7,9 +7,16 @@ const router = useRouter()
 const route = useRoute()
 
 const cotizaciones = ref([])
+const buscadorRef = ref(null)
 const resetBuscador = ref(false)
 const busquedaRealizada = ref(false)
 const cargandoBusqueda = ref(false)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: 10,
+  total: 0,
+})
 
 const hayFiltrosDashboard = computed(() => {
   return Boolean(
@@ -41,6 +48,15 @@ const actualizarResultados = (resultados) => {
   busquedaRealizada.value = true
 }
 
+const actualizarPagination = (meta) => {
+  pagination.value = {
+    current_page: meta?.current_page || 1,
+    last_page: meta?.last_page || 1,
+    per_page: meta?.per_page || 10,
+    total: meta?.total || 0,
+  }
+}
+
 const actualizarLoading = (estado) => {
   cargandoBusqueda.value = Boolean(estado)
 }
@@ -68,10 +84,37 @@ const claseVigencia = (vigencia) => {
   return 'bg-slate-100 text-slate-700'
 }
 
+const claseDiasObservacion = (cotizacion) => {
+  if (cotizacion?.vigencia?.estado === 'vencida') {
+    return 'bg-rose-600 text-white'
+  }
+
+  return 'bg-emerald-600 text-white'
+}
+
+const diasObservacion = (cotizacion) => {
+  const dias = cotizacion?.vigencia?.dias_restantes
+  if (dias === null || dias === undefined || Number.isNaN(Number(dias))) return '-'
+  return Math.abs(Number(dias))
+}
+
+const irPagina = async (page) => {
+  if (page < 1 || page > pagination.value.last_page || cargandoBusqueda.value) return
+  await buscadorRef.value?.buscar(page)
+}
+
+const fechaCorta = (fechaISO) => {
+  if (!fechaISO) return ''
+  const match = String(fechaISO).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`
+  return formatoFecha(fechaISO).slice(0, 10)
+}
+
 const borrarFiltros = () => {
   cotizaciones.value = []
   resetBuscador.value = !resetBuscador.value
   busquedaRealizada.value = false
+  actualizarPagination({ current_page: 1, last_page: 1, per_page: 10, total: 0 })
   router.replace({ path: route.path, query: {} })
 };
 </script>
@@ -79,7 +122,7 @@ const borrarFiltros = () => {
 <template>
   <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
-      <QuoterBuscador @resultados="actualizarResultados" @loading="actualizarLoading" :reset="resetBuscador" />
+      <QuoterBuscador ref="buscadorRef" @resultados="actualizarResultados" @pagination="actualizarPagination" @loading="actualizarLoading" :reset="resetBuscador" />
     </div>
 
     <div
@@ -104,51 +147,95 @@ const borrarFiltros = () => {
       </button>
     </div>
 
-    <div v-if="cotizaciones.length" class="grid grid-cols-1 gap-3">
-      <article
-        v-for="c in cotizaciones"
-        :key="c.id"
-        class="bg-white border border-slate-200 rounded-xl p-4 md:p-5 shadow-sm hover:shadow-md transition-shadow"
-      >
-        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-          <div class="space-y-1">
-            <p class="text-slate-900 font-semibold">{{ c.codigo }}</p>
-            <p class="text-sm text-slate-600">{{ formatoFecha(c.created_at) }}</p>
-            <p class="text-sm text-slate-700">
-              Paciente: <span class="font-medium text-slate-900">{{ nombrePaciente(c) }}</span>
-            </p>
-            <p class="text-sm text-slate-700">Identificación: {{ c.paciente?.numero_identificacion || 'N/A' }}</p>
-          </div>
-
-          <div class="flex items-center gap-2 flex-wrap md:justify-end">
-            <span v-if="c.es_prioritaria" class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold uppercase tracking-wide">
-              Prioritaria
-            </span>
-            <span
-              v-if="c.vigencia?.label"
-              class="px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide"
-              :class="claseVigencia(c.vigencia)"
-            >
-              {{ c.vigencia.label }}
-            </span>
-            <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide">
-              {{ c.estado?.nombre || 'Sin estado' }}
-            </span>
-            <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold uppercase tracking-wide">
-              {{ c.tipo_gestion || 'Sin tipo' }}
-            </span>
-          </div>
+    <div v-if="cotizaciones.length" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-slate-900">Resultados de seguimiento</p>
+          <p class="text-xs text-slate-500">Revisa, imprime o edita cada cotización desde la misma tabla.</p>
         </div>
+        <span class="w-fit rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
+          {{ pagination.total }} registro{{ pagination.total === 1 ? '' : 's' }}
+        </span>
+      </div>
 
-        <div class="mt-4">
-          <NuxtLink
-            :to="`/cotizacion/${c.id}`"
-            class="inline-flex items-center h-9 px-3 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      <div class="overflow-x-auto">
+      <table class="min-w-[1180px] w-full text-sm border-collapse">
+        <thead class="bg-[#172a83] text-white">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Fecha de<br>creación</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Consecutivo</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Nombre del<br>paciente</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Identificación</th>
+            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Estado<br>base</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Médico</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Estado de<br>gestión</th>
+            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Días</th>
+            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr v-for="c in cotizaciones" :key="c.id" class="hover:bg-indigo-50/40 transition-colors">
+            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ fechaCorta(c.created_at) }}</td>
+            <td class="px-4 py-3 whitespace-nowrap font-bold text-slate-950">{{ c.codigo }}</td>
+            <td class="px-4 py-3 font-semibold text-slate-950">{{ nombrePaciente(c) }}</td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.paciente?.numero_identificacion || 'N/A' }}</td>
+            <td class="px-4 py-3 text-center">
+              <span class="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase text-indigo-700 ring-1 ring-indigo-200">
+                {{ c.estado?.nombre || 'Sin estado' }}
+              </span>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.medico?.nombre || 'N/A' }}</td>
+            <td class="px-4 py-3 text-slate-700">{{ c.estado_gestion?.nombre || 'Sin gestión' }}</td>
+            <td class="px-4 py-3 text-center">
+              <span
+                v-if="c.vigencia?.mostrar !== false"
+                class="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-xs font-bold ring-2 ring-white shadow-sm"
+                :class="claseDiasObservacion(c)"
+                :title="c.vigencia?.label || ''"
+              >
+                {{ diasObservacion(c) }}
+              </span>
+              <span v-else>-</span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center justify-end gap-2 whitespace-nowrap">
+                <NuxtLink :to="`/cotizacion/${c.id}`" title="Ver detalle" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-white hover:border-indigo-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5c5.5 0 9 5.3 9 7s-3.5 7-9 7s-9-5.3-9-7s3.5-7 9-7m0 2c-4 0-6.8 3.8-7 5c.2 1.2 3 5 7 5s6.8-3.8 7-5c-.2-1.2-3-5-7-5m0 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5"/></svg>
+                </NuxtLink>
+                <NuxtLink :to="`/cotizacion/imprimir/${c.id}`" title="Imprimir cotización" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 9V3h12v6h1a3 3 0 0 1 3 3v5h-4v4H6v-4H2v-5a3 3 0 0 1 3-3zm2 0h8V5H8zm0 10h8v-5H8zm11-4v-3a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3h1v-3h12v3z"/></svg>
+                </NuxtLink>
+                <NuxtLink :to="`/cotizacion/editar/${c.id}`" title="Editar" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-indigo-700 text-white hover:bg-indigo-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="m5 16.2l9.9-9.9l2.8 2.8L7.8 19H5zm11.3-11.3l1.1-1.1a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-1.1 1.1z"/></svg>
+                </NuxtLink>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <p class="text-sm text-slate-600">
+          Página {{ pagination.current_page }} de {{ pagination.last_page }} · {{ pagination.per_page }} por página
+        </p>
+        <div class="flex items-center gap-2">
+          <button
+            class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            :disabled="pagination.current_page <= 1 || cargandoBusqueda"
+            @click="irPagina(pagination.current_page - 1)"
           >
-            Ver detalle
-          </NuxtLink>
+            Anterior
+          </button>
+          <button
+            class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            :disabled="pagination.current_page >= pagination.last_page || cargandoBusqueda"
+            @click="irPagina(pagination.current_page + 1)"
+          >
+            Siguiente
+          </button>
         </div>
-      </article>
+      </div>
     </div>
 
     <div v-else-if="busquedaRealizada" class="flex justify-center items-center py-10">
@@ -172,3 +259,4 @@ const borrarFiltros = () => {
     </div>
   </div>
 </template>
+

@@ -50,6 +50,7 @@ interface ReporteItem {
   nombre_paciente: string | null
   tipo_identificacion_paciente: string | null
   numero_identificacion_paciente: string | null
+  cups?: string[]
   cups_procedimientos: string | null
   lateralidad: string | null
   valor_coc_dc_derecho_clinico: string
@@ -297,11 +298,35 @@ const descargarExcel = async () => {
 
     const payload = data.value as { data?: ReporteItem[] }
     const registros = payload?.data || []
+    const maxCups = registros.reduce((max, item) => {
+      const cups = Array.isArray(item.cups)
+        ? item.cups
+        : String(item.cups_procedimientos || '')
+          .split('|')
+          .map((cup) => cup.trim())
+          .filter(Boolean)
+
+      return Math.max(max, cups.length)
+    }, 0)
+    const cupHeaders = Array.from({ length: Math.max(1, maxCups) }, (_, index) => `CUP ${index + 1}`)
 
     const filas = registros.map((item) => {
       const fila: Record<string, string> = {}
+      const cups = Array.isArray(item.cups)
+        ? item.cups
+        : String(item.cups_procedimientos || '')
+          .split('|')
+          .map((cup) => cup.trim())
+          .filter(Boolean)
 
       columnas.forEach((columna) => {
+        if (columna.key === 'cups_procedimientos') {
+          cupHeaders.forEach((header, index) => {
+            fila[header] = cups[index] || 'N/A'
+          })
+          return
+        }
+
         const valor = item[columna.key]
         fila[columna.label] = valor === null || valor === undefined || valor === '' ? 'N/A' : String(valor)
       })
@@ -313,7 +338,7 @@ const descargarExcel = async () => {
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Reporte Cotizaciones')
 
-    const headers = columnas.map((c) => c.label)
+    const headers = columnas.flatMap((c) => c.key === 'cups_procedimientos' ? cupHeaders : [c.label])
     worksheet.addRow(headers)
 
     filas.forEach((fila) => {

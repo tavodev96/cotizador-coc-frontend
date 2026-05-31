@@ -5,7 +5,7 @@ const props = defineProps({
     reset: Boolean
 })
 
-const emit = defineEmits(['resultados', 'loading'])
+const emit = defineEmits(['resultados', 'loading', 'pagination'])
 const route = useRoute()
 const router = useRouter()
 
@@ -54,6 +54,12 @@ const mostrarDropdownEntidades = ref(false)
 const mostrarDropdownAsesores = ref(false)
 
 const loading = ref(false)
+const pagination = ref({
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+})
 
 const normalizar = (texto) =>
     String(texto || '')
@@ -247,7 +253,7 @@ const handleClickOutsideDropdowns = (event) => {
     }
 }
 
-const buscar = async () => {
+const buscar = async (page = 1) => {
     loading.value = true
     emit('loading', true)
     try {
@@ -265,6 +271,8 @@ const buscar = async () => {
                 asesor_id: filtros.value.asesor_id,
                 estado_id: filtros.value.estado_id,
                 estado_ids: filtros.value.estado_id === '6' ? '4,6' : undefined,
+                page,
+                per_page: pagination.value.per_page,
                 _t: Date.now() // evita cache agregando timestamp
             },
         }, undefined, buildRequestKey('seguimiento-busqueda'))
@@ -276,7 +284,14 @@ const buscar = async () => {
         }
 
         registros.value = data.value.data || []
+        pagination.value = {
+            current_page: data.value.current_page || 1,
+            last_page: data.value.last_page || 1,
+            per_page: data.value.per_page || 10,
+            total: data.value.total || registros.value.length,
+        }
         emit('resultados', registros.value)
+        emit('pagination', pagination.value)
 
     } catch (error) {
         console.error('Error buscando cotizaciones:', error)
@@ -286,6 +301,10 @@ const buscar = async () => {
         emit('loading', false)
     }
 }
+
+defineExpose({
+    buscar,
+})
 
 onMounted(() => {
     cargarCatalogos().then(async () => {
@@ -316,6 +335,13 @@ watch(() => props.reset, () => {
     buscadorEntidad.value = ''
     buscadorAsesor.value = ''
     registros.value = []
+    pagination.value = {
+        current_page: 1,
+        last_page: 1,
+        per_page: 10,
+        total: 0,
+    }
+    emit('pagination', pagination.value)
     cerrarDropdowns()
 })
 

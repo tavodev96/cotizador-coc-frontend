@@ -1,6 +1,7 @@
 <script setup>
 const nuxtApp = useNuxtApp()
 const routeLoading = ref(false)
+const sidebarPinned = ref(true)
 const { user } = useSanctumAuth()
 const { status: syncStatus, fetchStatus, lastCompletedAt, abortSync, runningAction } = useSyncManagement()
 
@@ -88,6 +89,11 @@ watch(
 )
 
 onMounted(async () => {
+  const savedSidebarPinned = localStorage.getItem('sai.sidebarPinned')
+  if (savedSidebarPinned !== null) {
+    sidebarPinned.value = savedSidebarPinned === 'true'
+  }
+
   if (!user.value) {
     return
   }
@@ -100,6 +106,12 @@ onBeforeUnmount(() => {
 
   if (completionTimer) {
     clearTimeout(completionTimer)
+  }
+})
+
+watch(sidebarPinned, (value) => {
+  if (process.client) {
+    localStorage.setItem('sai.sidebarPinned', String(value))
   }
 })
 </script>
@@ -145,8 +157,18 @@ onBeforeUnmount(() => {
 
     <GeneralNavbar />
     <div class="flex flex-col lg:flex-row gap-6 pt-24 px-4 md:px-6 xl:px-8 pb-6 max-w-[1600px] mx-auto">
-      <LazyGeneralSidebar />
+      <div v-show="sidebarPinned" class="relative">
+        <LazyGeneralSidebar />
+      </div>
       <main class="flex-1 min-w-0">
+        <button
+          class="mb-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          :aria-pressed="sidebarPinned"
+          @click="sidebarPinned = !sidebarPinned"
+        >
+          <span class="text-lg leading-none">{{ sidebarPinned ? '‹' : '›' }}</span>
+          {{ sidebarPinned ? 'Desanclar menu' : 'Anclar menu' }}
+        </button>
         <Transition name="shell-fade" mode="out-in">
           <div v-if="routeLoading" key="default-shell" class="space-y-4 animate-pulse">
             <div class="h-8 w-1/3 bg-slate-200 rounded-lg"></div>
