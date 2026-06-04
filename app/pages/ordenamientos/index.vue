@@ -101,6 +101,8 @@ const fetchData = async () => {
 const generarCotizacion = (item) => {
     const codigos = (item.codigos || []).filter(Boolean)
     const procedimientos = (item.procedimientos || []).filter(Boolean)
+    const entidadQuery = item.entidad_nom && String(item.entidad_nom).trim() ? item.entidad_nom : 'N/A'
+    const entidadIdFromQuery = findEntidadIdFromName(entidadQuery)
 
     router.push({
         name: 'gestion-cotizacion',
@@ -109,7 +111,8 @@ const generarCotizacion = (item) => {
             numero_identificacion: item.documento,
             fecha_ordenamiento: item.fecha,
             entidad_cod: item.entidad_cod,
-            entidad: item.entidad_nom,
+            entidad: entidadQuery,
+            entidad_id: entidadIdFromQuery || undefined,
             medico: item.medico,
             medico_id: item.id_medico,
             consultorio: item.consultorio,
@@ -144,6 +147,26 @@ const getMedicoId = (m) => {
 
 const getEntidadId = (e) => {
     return e?.id ?? e?.value ?? ''
+}
+
+const normalizar = (texto) => String(texto || '').trim().toLowerCase()
+
+const findEntidadIdFromName = (nombre) => {
+    const nombreNormalizado = normalizar(nombre)
+    if (!nombreNormalizado) return null
+
+    const exactMatch = entidades.value.find((e) => normalizar(e.nombre) === nombreNormalizado)
+    if (exactMatch) return Number(getEntidadId(exactMatch))
+
+    if (['n/a', 'na'].includes(nombreNormalizado) || nombreNormalizado.includes('particular')) {
+        const exactParticulares = entidades.value.find((e) => normalizar(e.nombre) === 'particulares')
+        if (exactParticulares) return Number(getEntidadId(exactParticulares))
+
+        const containsParticulares = entidades.value.find((e) => normalizar(e.nombre).includes('particulares'))
+        if (containsParticulares) return Number(getEntidadId(containsParticulares))
+    }
+
+    return null
 }
 
 const filteredMedicos = computed(() => {

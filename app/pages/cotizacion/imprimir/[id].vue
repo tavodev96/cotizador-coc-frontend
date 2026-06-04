@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 definePageMeta({
   middleware: ['sanctum:auth'],
 });
@@ -18,6 +18,7 @@ const correoDestino = ref('')
 const progresoCorreo = ref(0)
 const imprimirParaPaciente = ref(false)
 const imprimirParaPacienteDetallada = ref(false)
+const verDetallado = ref(false)
 
 // Detectar si viene desde la página de consultas
 const modoConsulta = computed(() => route.query.modo === 'consulta')
@@ -241,6 +242,34 @@ const totalCantidadLentes = computed(() => {
 
 const toNumber = (value) => Number(value || 0)
 
+const polizaSeleccionada = computed(() => {
+  const poliza = cotizacion.value?.poliza || null
+  const valorPoliza = toNumber(poliza?.valor_poliza ?? cotizacion.value?.valor_poliza)
+  const valorAsegurado = toNumber(poliza?.valor_asegurado ?? cotizacion.value?.valor_asegurado)
+
+  if (!poliza && !cotizacion.value?.poliza_id && valorPoliza <= 0) return null
+
+  return {
+    nombre: poliza?.nombre || cotizacion.value?.nombre_poliza || 'Póliza',
+    valor_asegurado: valorAsegurado,
+    valor_poliza: valorPoliza,
+  }
+})
+const polizaValor = computed(() => toNumber(polizaSeleccionada.value?.valor_poliza ?? cotizacion.value?.valor_poliza))
+const mostrarValorProcedimiento = computed(() => verDetallado.value && !modoConsulta.value)
+const procedimientosPrint = computed(() => {
+  if (verDetallado.value && !modoConsulta.value && !modoPaciente.value) {
+    return cotizacion.value?.items || []
+  }
+
+  return itemsAgrupados.value
+})
+const procedimientoGridStyle = computed(() => ({
+  gridTemplateColumns: mostrarValorProcedimiento.value
+    ? '74px minmax(0, 1fr) 96px 104px'
+    : '74px minmax(0, 1fr) 96px'
+}))
+
 const totalBaseCodificacion = computed(() => {
   if (!esCodificacion.value) return 0
 
@@ -332,6 +361,7 @@ const getConceptoLabel = (concepto, connom) => {
   if (c === 'DP' || /DERECHOS/i.test(name)) return 'DP - Derechos Clínicos';
   if (c === 'HANQ' || /ANEST/i.test(name)) return 'HANQ - Honorarios Anestesiologo';
   if (c === 'HMLA' || /HONORARIOS/i.test(name)) return 'HMLA - Honorarios Medicos Laser';
+  if (c === 'HMDQ' || /HONORARIOS/i.test(name)) return 'HMDQ - Honorarios Cirujano';
   if (c === 'LASH' || /LASER/i.test(name)) return 'LASH - Derechos Clínicos';
   if (!c || c === 'SIN_CONCEPTO') return 'HM - Honorarios Médicos';
   return `${c} - ${name || 'Sin nombre'}`;
@@ -364,7 +394,7 @@ const mmToPx = (mm) => (mm * 96) / 25.4
 
 const applySinglePageScale = () => {
   const el = contentRef.value
-  if (!el) return () => {}
+  if (!el) return () => { }
 
   const originalStyles = {
     transform: el.style.transform,
@@ -401,7 +431,7 @@ const renderContentCanvas = async (html2canvas) => {
 
   try {
     return await html2canvas(el, {
-      scale: 3,
+      scale: 4,
       useCORS: true,
       logging: false,
       backgroundColor: null
@@ -452,7 +482,7 @@ const buildPdfOnTemplate = async (html2canvas) => {
   const marginBottom = 58
   const drawWidth = pageWidth - (marginX * 2)
   const drawAreaHeight = pageHeight - marginTop - marginBottom
-  const sliceHeightPx = Math.floor((canvas.width * drawAreaHeight) / drawWidth)
+  const sliceHeightPx = Math.max(1, Math.floor((canvas.width * drawAreaHeight) / drawWidth))
 
   let sourceY = 0
 
@@ -464,6 +494,7 @@ const buildPdfOnTemplate = async (html2canvas) => {
     const [page] = await pdfDoc.copyPages(templatePdf, [0])
 
     pdfDoc.addPage(page)
+
     page.drawImage(pageImage, {
       x: marginX,
       y: pageHeight - marginTop - drawHeight,
@@ -519,16 +550,16 @@ const imprimirPDF = async () => {
             printWindow.print();
           }, 500);
         }
-        
-        
+
+
         // Cargar y agregar la plantilla PDF como fondo
-        
-        
+
+
         // Convertir la página de la plantilla a imagen
-        
+
 
         // Posicionar el contenido con márgenes apropiados
-        
+
 
         // Abrir en ventana de impresión
       } else {
@@ -560,7 +591,7 @@ const descargarPDF = async () => {
         link.download = `Cotizacion_${cotizacion.value.codigo || 'nueva'}.pdf`
         link.click()
         URL.revokeObjectURL(url)
-        
+
 
         // Posicionar el contenido con márgenes apropiados
       } else {
@@ -655,30 +686,54 @@ const enviarCorreo = async () => {
     </div>
   </div>
   <div v-show="!loading">
-    <div class="bg-white text-black p-6 text-sm" ref="contentRef" style="width: 210mm; height: auto; margin: 0 auto; font-family: Arial, sans-serif;">
-      <!-- Datos del paciente -->
-      <div class="grid grid-cols-2 gap-6 mb-4" style="font-size: 12px; line-height: 1.4;">
-        <div>
-          <p style="margin: 2px 0;"><strong>Paciente:</strong> {{ cotizacion?.paciente?.nombre_completo }}</p>
-          <p style="margin: 2px 0;"><strong>Tipo de Documento:</strong> {{ cotizacion?.paciente?.tipo_identificacion }}</p>
-          <p style="margin: 2px 0;"><strong>Número de Documento:</strong> {{ cotizacion?.paciente?.numero_identificacion }}</p>
-          <p style="margin: 2px 0;"><strong>Correo:</strong> {{ cotizacion?.paciente?.correo }}</p>
-          <p style="margin: 2px 0;"><strong>Teléfono:</strong> {{ cotizacion?.paciente?.telefono }}</p>
+    <div class="quote-print-document bg-white text-black p-5 text-sm" ref="contentRef"
+      style="width: 210mm; height: auto; margin: 0 auto; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.35;">
+      <section class="quote-patient-data">
+        <div class="quote-patient-col">
+          <div class="quote-info-row">
+            <strong>Paciente:</strong>
+            <span>{{ cotizacion?.paciente?.nombre_completo || 'N/A' }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Documento:</strong>
+            <span>{{ cotizacion?.paciente?.tipo_identificacion || '' }} {{ cotizacion?.paciente?.numero_identificacion || 'N/A' }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Correo:</strong>
+            <span>{{ cotizacion?.paciente?.correo || 'N/A' }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Teléfono:</strong>
+            <span>{{ cotizacion?.paciente?.telefono || 'N/A' }}</span>
+          </div>
         </div>
-        <div>
-          
-          
-          <p style="margin: 2px 0;"><strong>Fecha de Creación:</strong> {{ fechaHoraCreacion }}</p>
-          <p style="margin: 2px 0;"><strong>Médico:</strong> {{ cotizacion?.medico?.nombre }}</p>
-          <p style="margin: 2px 0;"><strong>Entidad:</strong> {{ cotizacion?.entidad?.nombre }}</p>
-          <p style="margin: 2px 0;" v-if="esCodificacion"><strong>Fecha de Autorización:</strong> {{ fechaAutorizacion }}</p>
-          <p style="margin: 2px 0;" v-if="esCodificacion"><strong>Fecha de Vigencia:</strong> {{ fechaVigenciaCodificacion }}</p>
+        <div class="quote-patient-col">
+          <div class="quote-info-row">
+            <strong>Fecha de Creación:</strong>
+            <span>{{ fechaHoraCreacion }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Médico:</strong>
+            <span>{{ cotizacion?.medico?.nombre || 'N/A' }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Entidad:</strong>
+            <span>{{ cotizacion?.entidad?.nombre || 'N/A' }}</span>
+          </div>
+          <div v-if="esCodificacion" class="quote-info-row">
+            <strong>Fecha de Autorización:</strong>
+            <span>{{ fechaAutorizacion }}</span>
+          </div>
+          <div v-if="esCodificacion" class="quote-info-row">
+            <strong>Fecha de Vigencia:</strong>
+            <span>{{ fechaVigenciaCodificacion }}</span>
+          </div>
         </div>
-      </div>
-      <hr class="mb-4" />
+      </section>
+      <hr class="quote-divider" />
       <template v-if="esCodificacion && modoPaciente">
-        <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+        <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">PROCEDIMIENTO</h2>
+        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
           <thead class="bg-[#1570b1] text-white">
             <tr>
               <th class="border px-2 py-1" style="padding: 6px 4px;">CUPS</th>
@@ -696,8 +751,8 @@ const enviarCorreo = async () => {
         </table>
 
         <template v-if="detallesDesglosados.insumos.length > 0">
-          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
-          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+          <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
+          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
             <thead class="bg-[#1570b1] text-white">
               <tr>
                 <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
@@ -716,8 +771,8 @@ const enviarCorreo = async () => {
         </template>
 
         <template v-if="detallesDesglosados.lentes.length > 0">
-          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
-          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 16px;">
+          <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
+          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
             <thead class="bg-[#1570b1] text-white">
               <tr>
                 <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
@@ -735,46 +790,55 @@ const enviarCorreo = async () => {
           </table>
         </template>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; ">
           <div>
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">VALORES DE CODIFICACIÓN</h2>
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">VALORES DE CODIFICACIÓN</h2>
             <table class="w-full border-collapse border border-gray-400" style="font-size: 11px;">
               <tbody>
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Copago</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.copago) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(cotizacion?.codificacion?.copago)
+                    }}</td>
                 </tr>
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Excedente tope</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
                 </tr>
                 <tr v-if="valorLentesCodificacion > 0">
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Lente</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(valorLentesCodificacion) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(valorLentesCodificacion)
+                    }}</td>
                 </tr>
                 <tr v-if="auxilioLenteCodificacion > 0">
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Auxilio de lente</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(auxilioLenteCodificacion) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(auxilioLenteCodificacion)
+                    }}</td>
                 </tr>
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Preanestesia</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
                 </tr>
                 <tr>
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Otros</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
                 </tr>
                 <tr v-if="Number(cotizacion?.codificacion?.insumos || 0) > 0">
                   <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Insumos</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(cotizacion?.codificacion?.insumos) }}</td>
+                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(cotizacion?.codificacion?.insumos) }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <div>
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">OBSERVACIONES</h2>
-            <div class="border border-gray-400 rounded-sm p-3" style="border: 1px solid #ccc; padding: 8px; min-height: 120px; font-size: 11px;">
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">OBSERVACIONES</h2>
+            <div class="border border-gray-400 rounded-sm p-3"
+              style="border: 1px solid #ccc; padding: 8px; min-height: 104px; font-size: 11px;">
               <p style="white-space: pre-line; margin: 0;">{{ cotizacion?.observaciones || 'Ninguna' }}</p>
             </div>
           </div>
@@ -784,63 +848,39 @@ const enviarCorreo = async () => {
       <template v-else>
         <!-- Procedimientos -->
         <!-- HANQ, DP, null -->
-        <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
-          <thead class="bg-[#1570b1] text-white">
-            <tr>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">CUPS</th>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
-              <th v-if="!modoConsulta" class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Modo consulta: mostrar agrupado sin valores -->
-            <tr v-if="modoConsulta" v-for="(item, idx) in itemsAgrupados" :key="`consulta-${idx}`">
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
-              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
-            </tr>
-            <!-- Modo privado: mostrar agrupado con valores -->
-            <tr v-else-if="modoPaciente" v-for="(item, idx) in itemsAgrupados" :key="`privado-${idx}`">
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
-              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
-              <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(item.valor) }}</td>
-            </tr>
-            <!-- Modo normal: mostrar todos los items con valores -->
-            <tr v-else v-for="(item, idx) in cotizacion?.items" :key="`normal-${idx}`">
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
-              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
-              <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(item.valor) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <h2 class="quote-section-title">PROCEDIMIENTO</h2>
+        <div class="quote-grid" :class="{ 'cols-4': mostrarValorProcedimiento }" :style="procedimientoGridStyle">
+          <div class="quote-grid-head">CUPS</div>
+          <div class="quote-grid-head">Nombre</div>
+          <div class="quote-grid-head">Lateralidad</div>
+          <div v-if="mostrarValorProcedimiento" class="quote-grid-head text-right">Valor</div>
+          <template v-for="(item, idx) in procedimientosPrint" :key="`proc-grid-${idx}`">
+            <div class="quote-grid-cell">{{ item.codigo }}</div>
+            <div class="quote-grid-cell">{{ item.nombre }}</div>
+            <div class="quote-grid-cell capitalize">{{ item.lateralidad }}</div>
+            <div v-if="mostrarValorProcedimiento" class="quote-grid-cell text-right">{{ formatMoney(item.valor) }}</div>
+          </template>
+        </div>
+
 
         <!-- Agrupado por concepto (mostrar en modo normal y modo consulta) -->
         <div v-if="!modoPaciente || modoConsulta">
-          <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">AGRUPADO POR CONCEPTO</h2>
-          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
-            <thead class="bg-[#1570b1] text-white">
-              <tr>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Concepto</th>
-                <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in agrupadoPorConcepto" :key="c.concepto">
-                <td class="border px-2 py-1" style="padding: 4px;">{{ getConceptoLabel(c.concepto, c.connom) }}</td>
-                <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(c.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <h2 class="quote-section-title">AGRUPADO POR CONCEPTO</h2>
+          <div class="quote-grid cols-2" style="grid-template-columns: minmax(0, 1fr) 170px;">
+            <div class="quote-grid-head">Concepto</div>
+            <div class="quote-grid-head text-right">Valor Total</div>
+            <template v-for="c in agrupadoPorConcepto" :key="c.concepto">
+              <div class="quote-grid-cell">{{ getConceptoLabel(c.concepto, c.connom) }}</div>
+              <div class="quote-grid-cell text-right">{{ formatMoney(c.total) }}</div>
+            </template>
+          </div>
         </div>
-        <div v-if="modoPacienteResumen && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
+        <div
+          v-if="modoPacienteResumen && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
           <!-- Insumos (agregados con valores) -->
           <template v-if="detallesAgrupados.insumos.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
               <thead class="bg-[#1570b1] text-white">
                 <tr>
                   <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
@@ -851,8 +891,8 @@ const enviarCorreo = async () => {
               <tbody>
                 <tr>
                   <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Insumos</td>
-                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Insumos</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{ totalCantidadInsumos }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{
+                    totalCantidadInsumos }}</td>
                   <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
                     {{ formatMoney(totalInsumos) }}
                   </td>
@@ -863,8 +903,8 @@ const enviarCorreo = async () => {
 
           <!-- Lentes (agregados con valores) -->
           <template v-if="detallesAgrupados.lentes.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
               <thead class="bg-[#1570b1] text-white">
                 <tr>
                   <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
@@ -875,7 +915,8 @@ const enviarCorreo = async () => {
               <tbody>
                 <tr>
                   <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Lentes</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{ totalCantidadLentes }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{
+                    totalCantidadLentes }}</td>
                   <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
                     {{ formatMoney(totalLentes) }}
                   </td>
@@ -885,10 +926,11 @@ const enviarCorreo = async () => {
           </template>
         </div>
 
-        <div v-if="(modoPacienteDetallado || modoConsulta) && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
+        <div
+          v-if="(modoPacienteDetallado || modoConsulta) && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
               <thead class="bg-[#1570b1] text-white">
                 <tr>
                   <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
@@ -898,19 +940,22 @@ const enviarCorreo = async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="detalle in detallesDesglosados.insumos" :key="`pac-det-ins-${detalle.id || detalle.codigo}-${detalle.nombre}`">
+                <tr v-for="detalle in detallesDesglosados.insumos"
+                  :key="`pac-det-ins-${detalle.id || detalle.codigo}-${detalle.nombre}`">
                   <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
                   <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}
+                  </td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
           </template>
 
           <template v-if="detallesDesglosados.lentes.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
+            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
+            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
               <thead class="bg-[#1570b1] text-white">
                 <tr>
                   <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
@@ -920,11 +965,14 @@ const enviarCorreo = async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="detalle in detallesDesglosados.lentes" :key="`pac-det-len-${detalle.id || detalle.codigo}-${detalle.nombre}`">
+                <tr v-for="detalle in detallesDesglosados.lentes"
+                  :key="`pac-det-len-${detalle.id || detalle.codigo}-${detalle.nombre}`">
                   <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
                   <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
+                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}
+                  </td>
+                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{
+                    formatMoney(detalle.valor_total) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -932,53 +980,57 @@ const enviarCorreo = async () => {
         </div>
 
         <!-- Insumos y Lentes detallados (modo normal) -->
-        <div v-if="!modoPaciente && !modoConsulta && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
+        <div
+          v-if="!modoPaciente && !modoConsulta && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="detalle in detallesDesglosados.insumos" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">INSUMOS</h2>
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 86px 116px;">
+              <div class="quote-grid-head">Código</div>
+              <div class="quote-grid-head">Nombre</div>
+              <div class="quote-grid-head text-center">Cantidad</div>
+              <div class="quote-grid-head text-right">Valor</div>
+              <template v-for="detalle in detallesDesglosados.insumos" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
+                <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+                <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+                <div class="quote-grid-cell text-center">{{ detalle.cantidad }}</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(detalle.valor_total) }}</div>
+              </template>
+            </div>
           </template>
 
           <template v-if="detallesDesglosados.lentes.length > 0">
-            <h2 style="font-size: 14px; font-weight: bold; margin: 8px 0 6px 0;">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 24px;">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="detalle in detallesDesglosados.lentes" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(detalle.valor_total) }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">LENTES</h2>
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 86px 116px;">
+              <div class="quote-grid-head">Código</div>
+              <div class="quote-grid-head">Nombre</div>
+              <div class="quote-grid-head text-center">Cantidad</div>
+              <div class="quote-grid-head text-right">Valor</div>
+              <template v-for="detalle in detallesDesglosados.lentes" :key="detalle.id || `${detalle.codigo}-${detalle.nombre}`">
+                <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+                <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+                <div class="quote-grid-cell text-center">{{ detalle.cantidad }}</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(detalle.valor_total) }}</div>
+              </template>
+            </div>
           </template>
+
         </div>
       </template>
-      <p style="text-align: center; font-weight: bold; margin-bottom: 16px; font-size: 16px;">
+      <div v-if="polizaSeleccionada" class="quote-policy-row">
+        <div>
+          <span>Póliza</span>
+          <strong>{{ polizaSeleccionada.nombre }}</strong>
+        </div>
+        <div>
+          <span>Valor asegurado</span>
+          <strong>{{ formatMoney(polizaSeleccionada.valor_asegurado) }}</strong>
+        </div>
+        <div>
+          <span>Valor póliza</span>
+          <strong>{{ formatMoney(polizaSeleccionada.valor_poliza) }}</strong>
+        </div>
+      </div>
+      <p style="text-align: center; font-weight: bold; margin-bottom: 16px; font-size: 16px; margin-top: 24px;">
         {{ esCodificacion ? 'VALOR TOTAL:' : 'VALOR TOTAL DEL PROCEDIMIENTO:' }} {{ formatMoney(totalMostrado) }}
       </p>
 
@@ -1037,12 +1089,9 @@ const enviarCorreo = async () => {
             Imprimir información de la cotización para el paciente
           </button> -->
 
-          <button
-            class="px-4 py-2 rounded text-white"
+          <button class="px-4 py-2 rounded text-white"
             :class="imprimirParaPacienteDetallada ? 'bg-indigo-700' : 'bg-gray-500'"
-            @click="toggleImprimirPacienteDetallada"
-            :disabled="modoConsulta"
-          >
+            @click="toggleImprimirPacienteDetallada" :disabled="modoConsulta">
             Imprimir detallada
           </button>
 
@@ -1058,6 +1107,15 @@ const enviarCorreo = async () => {
           {{ modoActivoLabel }}
         </span>
       </div>
+
+      <div class="mt-4 flex items-center gap-3">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            v-model="verDetallado" :disabled="modoConsulta" />
+          <span>Ver detallado</span>
+        </label>
+        <p class="text-sm text-slate-500">Grupo de procedimientos por defecto; activa para ver valores por item.</p>
+      </div>
     </div>
     <!-- Botón imprimir -->
     <div class="mt-6 text-center print:hidden flex justify-center gap-4">
@@ -1065,8 +1123,9 @@ const enviarCorreo = async () => {
         <span v-if="loadingImprimir">Imprimiendo...</span>
         <span v-else>🖨 Imprimir</span>
       </button>
-      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded" @click="abrirModalCorreo"
-        >
+      <button v-if="!modoConsulta"
+        class="flex justify-center items-center gap-2 mt-4 px-4 py-2 bg-green-600 text-white rounded"
+        @click="abrirModalCorreo">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
           viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE -->
           <path fill="currentColor"
@@ -1074,7 +1133,8 @@ const enviarCorreo = async () => {
         </svg>
         Correo electrónico
       </button>
-      <button v-if="!modoConsulta" class="flex justify-center items-center gap-2 bg-red-600 text-white mt-4 px-4 py-2 rounded"
+      <button v-if="!modoConsulta"
+        class="flex justify-center items-center gap-2 bg-red-600 text-white mt-4 px-4 py-2 rounded"
         @click="descargarPDF" :disabled="loadingDescargar">
         <template v-if="!loadingDescargar">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
@@ -1102,12 +1162,14 @@ const enviarCorreo = async () => {
             <h2 class="text-lg font-semibold text-slate-900">Enviar cotizacion por correo</h2>
             <p class="mt-1 text-sm text-slate-600">Confirma el correo del paciente o corrigelo antes de enviar.</p>
           </div>
-          <button class="text-xl text-slate-500 hover:text-slate-900" :disabled="loadingCorreo" @click="mostrarModalCorreo = false">x</button>
+          <button class="text-xl text-slate-500 hover:text-slate-900" :disabled="loadingCorreo"
+            @click="mostrarModalCorreo = false">x</button>
         </div>
 
         <label class="mt-4 block">
           <span class="text-sm font-semibold text-slate-700">Correo destino</span>
-          <input v-model="correoDestino" type="email" class="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" />
+          <input v-model="correoDestino" type="email"
+            class="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" />
         </label>
 
         <div v-if="loadingCorreo || progresoCorreo > 0" class="mt-4">
@@ -1118,10 +1180,12 @@ const enviarCorreo = async () => {
         </div>
 
         <div class="mt-5 flex justify-end gap-2">
-          <button class="h-10 rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-700" :disabled="loadingCorreo" @click="mostrarModalCorreo = false">
+          <button class="h-10 rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-700"
+            :disabled="loadingCorreo" @click="mostrarModalCorreo = false">
             Cancelar
           </button>
-          <button class="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60" :disabled="loadingCorreo || !correoDestino" @click="enviarCorreo">
+          <button class="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+            :disabled="loadingCorreo || !correoDestino" @click="enviarCorreo">
             {{ loadingCorreo ? 'Enviando...' : 'Enviar a correo' }}
           </button>
         </div>
@@ -1129,3 +1193,203 @@ const enviarCorreo = async () => {
     </div>
   </div>
 </template>
+
+<style>
+
+
+.quote-print-document table td,
+.quote-print-document table th {
+  vertical-align: middle !important;
+  padding: 3px 8px !important;
+  line-height: 1.05;
+}
+
+
+/* .quote-print-document table td {
+  display: table-cell;
+} */
+
+
+.quote-print-document table th,
+.quote-print-document table td {
+  min-height: 22px;
+}
+
+.quote-patient-data {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 2px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.quote-patient-col {
+  display: grid;
+  row-gap: 2px;
+  align-content: start;
+}
+
+.quote-info-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 6px;
+  min-height: 16px;
+  align-items: start;
+}
+
+.quote-info-row strong {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.quote-info-row span {
+  overflow-wrap: anywhere;
+}
+
+.quote-divider {
+  margin: 6px 0 8px;
+  border: 0;
+  border-top: 1px solid #9ca3af;
+}
+
+.quote-policy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+  margin: 6px 0 8px;
+  border: 1px solid #9ca3af;
+  font-size: 12px;
+}
+
+.quote-policy-row > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 8px 5px;
+  border-right: 1px solid #9ca3af;
+}
+
+.quote-policy-row > div:last-child {
+  border-right: 0;
+}
+
+.quote-policy-row span {
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.quote-policy-row strong {
+  color: #0f172a;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.quote-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 7px 0 6px;
+  line-height: 1.1;
+}
+
+.quote-grid {
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #9ca3af;
+  border-radius: 2px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.quote-grid-cell {
+  min-height: 26px;
+  display: grid;
+  place-items: center start;
+  align-content: center;
+  padding: 2px 7px 4px;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+.quote-grid:not(.cols-2):not(.cols-4) .quote-grid-cell:nth-last-child(-n + 3),
+.quote-grid.cols-4 .quote-grid-cell:nth-last-child(-n + 4),
+.quote-grid.cols-2 .quote-grid-cell:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.quote-grid-head {
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 2px 7px 4px;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #9ca3af;
+  background: #1570b1;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.05;
+  box-sizing: border-box;
+}
+
+.quote-grid-cell:nth-child(3n),
+.quote-grid-head:nth-child(3n) {
+  border-right: 0;
+}
+
+.quote-grid.cols-4 .quote-grid-cell:nth-child(4n),
+.quote-grid.cols-4 .quote-grid-head:nth-child(4n),
+.quote-grid.cols-2 .quote-grid-cell:nth-child(2n),
+.quote-grid.cols-2 .quote-grid-head:nth-child(2n) {
+  border-right: 0;
+}
+
+.quote-grid .text-right {
+  justify-content: end;
+  justify-items: end;
+  place-items: center end;
+  text-align: right;
+}
+
+.quote-grid .text-center {
+  justify-content: center;
+  justify-items: center;
+  place-items: center;
+  text-align: center;
+}
+
+.quote-grid .capitalize {
+  text-transform: capitalize;
+}
+
+@media print {
+  .quote-print-document {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .quote-section-title {
+    margin-bottom: 6px !important;
+  }
+
+  .quote-grid-cell,
+  .quote-grid-head {
+    display: grid !important;
+    align-items: center !important;
+    align-content: center !important;
+    box-sizing: border-box !important;
+    line-height: 1.05 !important;
+  }
+}
+
+</style>

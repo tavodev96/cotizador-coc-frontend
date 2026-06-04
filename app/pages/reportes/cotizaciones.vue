@@ -103,7 +103,7 @@ const columnas: ColumnaDef[] = [
   { key: 'numero_identificacion_paciente', label: 'No. ID' },
   { key: 'cups_procedimientos', label: 'CUPS' },
   { key: 'lateralidad', label: 'Lateralidad' },
-  { key: 'valor_coc_dc_derecho_clinico', label: 'Valor COC (DP)' },
+  { key: 'valor_coc_dc_derecho_clinico', label: 'Valor COC (DP/LASH)' },
   { key: 'asesor', label: 'Asesor' },
   { key: 'estado_gestion', label: 'Estado gestión' },
   { key: 'observacion_gestion', label: 'Observación' },

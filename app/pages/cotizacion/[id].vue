@@ -21,6 +21,7 @@ const nuevoComentario = ref('')
 const archivos = ref([])
 const historico_estados = ref([])
 const mostrarModalHistorico = ref(false)
+const mostrarModalVigencia = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
@@ -29,6 +30,8 @@ const savingPriority = ref(false)
 const syncingSalesforce = ref(false)
 const lastSalesforceLog = ref(null)
 const canSyncSalesforce = ref(false)
+const auditoriaLogs = ref([])
+const loadingAuditoriaLogs = ref(false)
 
 const checkSalesforcePermission = () => {
   const user = useUserStore?.()
@@ -69,6 +72,17 @@ const fetchDetalle = async () => {
   } catch (err) {
     console.error('Error capturado en fetchDetalle:', err)
   }
+}
+
+const fetchAuditoriaLogs = async () => {
+  loadingAuditoriaLogs.value = true
+  const { data, error } = await useSanctumFetch(`/api/auditoria/cotizacion/${route.params.id}`)
+
+  if (!error.value && data.value) {
+    auditoriaLogs.value = Array.isArray(data.value) ? data.value : []
+  }
+
+  loadingAuditoriaLogs.value = false
 }
 
 const fetchEstados = async () => {
@@ -348,6 +362,7 @@ onMounted(async () => {
     await Promise.all([
       fetchDetalle(),
       fetchEstados(),
+      fetchAuditoriaLogs(),
       // fetchLastSalesforceLog()
     ]);
   } catch (e) {
@@ -418,16 +433,66 @@ const auxilioLenteCodificacion = computed(() => Number(cotizacion.value?.codific
 const lenteNetoCodificacion = computed(() => Math.max(lenteBaseCodificacion.value - auxilioLenteCodificacion.value, 0))
 const insumosCodificacion = computed(() => Number(cotizacion.value?.codificacion?.insumos ?? 0))
 
-const totalConDetalles = computed(() => {
-  if (!cotizacion.value) return 0
+const totalProcedimientosAgrupados = computed(() => {
+  if (!Array.isArray(cotizacion.value?.items) || !cotizacion.value.items.length) return 0
 
-  const totalDetalles = cotizacion.value.detalles?.reduce(
-    (acc, d) => acc + (parseFloat(d.valor) || 0),
-    0
-  ) || 0
+  const grupos = new Map()
 
-  return (parseFloat(cotizacion.value.total) || 0) + totalDetalles
+  cotizacion.value.items.forEach((item) => {
+    const codigo = String(item?.codigo || '').trim()
+    const cantidad = Number(item?.cantidad || 1) || 1
+    const valorUnitario = Number(item?.valor || item?.valor_unitario || 0) || 0
+
+    if (!codigo) {
+      return
+    }
+
+    if (!grupos.has(codigo)) {
+      grupos.set(codigo, { codigo, total: 0 })
+    }
+
+    grupos.get(codigo).total += valorUnitario * cantidad
+  })
+
+  return Array.from(grupos.values()).reduce((acc, grupo) => acc + (Number(grupo.total) || 0), 0)
 })
+
+const totalDetallesAgrupados = computed(() => {
+  if (!Array.isArray(cotizacion.value?.detalles) || !cotizacion.value.detalles.length) return 0
+
+  return cotizacion.value.detalles.reduce((acc, detalle) => {
+    const cantidad = Number(detalle?.cantidad || 1) || 1
+    const valorUnitario = Number(detalle?.valor || detalle?.valor_unitario || 0) || 0
+
+    return acc + (valorUnitario * cantidad)
+  }, 0)
+})
+
+const polizaValor = computed(() => Number(cotizacion.value?.poliza?.valor_poliza ?? cotizacion.value?.valor_poliza ?? 0))
+const polizaVisible = computed(() => {
+  const poliza = cotizacion.value?.poliza || null
+  const valorPoliza = Number(poliza?.valor_poliza ?? cotizacion.value?.valor_poliza ?? 0)
+
+  if (!poliza && !cotizacion.value?.poliza_id && valorPoliza <= 0) return null
+
+  return {
+    nombre: poliza?.nombre || cotizacion.value?.poliza_nombre || `Póliza #${cotizacion.value?.poliza_id || ''}`.trim(),
+    valor_asegurado: Number(poliza?.valor_asegurado ?? cotizacion.value?.valor_asegurado ?? 0),
+    valor_poliza: valorPoliza,
+  }
+})
+
+const totalMostrado = computed(() => {
+  return totalProcedimientosAgrupados.value + totalDetallesAgrupados.value + polizaValor.value
+})
+
+const vigenciaLogs = computed(() =>
+  auditoriaLogs.value.filter((log) =>
+    log?.campo === 'codificacion.fecha_vigencia' ||
+    log?.campo === 'fecha_vigencia' ||
+    String(log?.descripcion || '').toLowerCase().includes('vigencia')
+  )
+)
 
 const vigenciaChipClass = computed(() => {
   const estado = cotizacion.value?.vigencia?.estado || ''
@@ -570,6 +635,10 @@ const fechaAutorizacionFormateada = computed(() => {
               class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition">
               Ver histórico
             </button>
+            <button @click="mostrarModalVigencia = true"
+              class="bg-emerald-700 text-white px-4 py-2 rounded-lg hover:bg-emerald-800 transition">
+              Ver historial de vigencia
+            </button>
           </div>
         </div>
       </div>
@@ -612,6 +681,13 @@ const fechaAutorizacionFormateada = computed(() => {
           </span>
         </li>
       </ul>
+
+      <div v-if="polizaVisible" class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <h3 class="text-sm font-semibold text-emerald-900">Póliza seleccionada</h3>
+        <p class="text-sm text-emerald-800 mt-1">{{ polizaVisible.nombre }}</p>
+        <p class="text-sm text-emerald-800">Valor asegurado: {{ formatearNumero(polizaVisible.valor_asegurado, 0) }}</p>
+        <p class="text-sm text-emerald-800 font-semibold">Valor de la póliza: {{ formatearNumero(polizaVisible.valor_poliza, 0) }}</p>
+      </div>
 
       <div v-if="cotizacion?.codificacion?.numero_autorizacion">
         <h3 class="mt-6 font-semibold text-slate-900">Autorización</h3>
@@ -687,7 +763,7 @@ const fechaAutorizacionFormateada = computed(() => {
       <p v-show="!cotizacion?.codificacion?.numero_autorizacion" class="mt-6">
         <span>
           <b>Total:</b> <span class="text-indigo-700 font-bold text-2xl">
-            ${{ totalConDetalles }}
+            ${{ totalMostrado }}
           </span>
         </span>
       </p>
@@ -823,6 +899,22 @@ const fechaAutorizacionFormateada = computed(() => {
         </li>
       </ul>
 
+    </div>
+  </div>
+
+  <div v-if="mostrarModalVigencia" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg relative border border-slate-200">
+      <button @click="mostrarModalVigencia = false" class="absolute top-3 right-3 text-gray-600 hover:text-black text-xl">✕</button>
+      <h3 class="text-lg font-bold mb-4">Historial de vigencia</h3>
+      <div v-if="loadingAuditoriaLogs" class="text-sm text-slate-500">Cargando historial...</div>
+      <ul v-else-if="vigenciaLogs.length" class="space-y-3 max-h-80 overflow-y-auto">
+        <li v-for="(log, index) in vigenciaLogs" :key="index" class="border-b pb-2 text-sm text-slate-700">
+          <p class="font-semibold">{{ log.fecha || formatoFecha(log.created_at) }}</p>
+          <p>{{ log.descripcion || log.detalle || 'Cambio de vigencia' }}</p>
+          <p class="text-xs text-slate-500">{{ log.usuario || 'Sistema' }}</p>
+        </li>
+      </ul>
+      <p v-else class="text-sm text-slate-500">No hay cambios de vigencia registrados.</p>
     </div>
   </div>
 
