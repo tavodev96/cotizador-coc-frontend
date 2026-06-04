@@ -16,6 +16,10 @@ export const useCotizacionForm = () => {
     tipo_gestion: '',
     medico_id: '',
     consultorio_id: '',
+    poliza_id: '',
+    poliza: null,
+    valor_poliza: 0,
+    fecha_vigencia: '',
     observaciones: '',
     items: [],
     insumos: [],
@@ -58,8 +62,13 @@ export const useCotizacionForm = () => {
     }, 0)
   )
 
+  const valorPoliza = computed(() => {
+    const poliza = cotizacion.value.poliza as any
+    return Number(poliza?.valor_poliza ?? cotizacion.value.valor_poliza ?? 0) || 0
+  })
+
   const totalCotizacion = computed(() =>
-    totalProcedimientos.value + totalInsumos.value + totalLentes.value
+    totalProcedimientos.value + totalInsumos.value + totalLentes.value + valorPoliza.value
   )
 
   return {
@@ -69,5 +78,6 @@ export const useCotizacionForm = () => {
     totalCotizacion,
     totalInsumos,
     totalLentes,
+    valorPoliza,
   }
 }

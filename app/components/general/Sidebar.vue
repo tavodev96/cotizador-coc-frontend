@@ -46,6 +46,7 @@
       <SidebarLink v-if="canAccessUsuariosConfig" label="Usuarios" link="/configuracion/usuarios" />
       <SidebarLink v-if="canAccessRolesPermisosConfig" label="Roles y permisos" link="/configuracion/roles-permisos" />
       <SidebarLink v-if="hasPermission('configuracion.correo.ver') || isSuperAdmin" label="Correo" link="/configuracion/correo" />
+      <SidebarLink v-if="hasPermission('configuracion.maestros.ver') || isSuperAdmin" label="Maestros" link="/configuracion/maestros" />
       <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
       <SidebarLink v-if="hasPermission('integraciones.salesforce.ver_logs') || isSuperAdmin" label="Integración Salesforce" link="/configuracion/integraciones-salesforce" />

@@ -1,9 +1,9 @@
-<template>
+﻿<template>
     <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
             <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Consultar cotizaciones</h1>
             <p class="text-sm text-slate-600">
-                Busca con número de identificación del paciente en
+                Busca con nÃºmero de identificaciÃ³n del paciente en
                 <span class="uppercase text-indigo-700 font-semibold">Servinte</span>.
             </p>
 
@@ -11,7 +11,7 @@
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Número de identificación del paciente"
+                    placeholder="NÃºmero de identificaciÃ³n del paciente"
                     class="w-full md:max-w-sm h-11 border border-slate-300 rounded-lg px-3 bg-white"
                     @keyup.enter="fetchCotizaciones"
                     :disabled="cargando"
@@ -44,7 +44,7 @@
             </div>
 
             <div v-else-if="cotizaciones.length === 0" class="py-10 text-center text-slate-500">
-                No hay cotizaciones para mostrar. Realiza una búsqueda.
+                No hay cotizaciones para mostrar. Realiza una bÃºsqueda.
             </div>
 
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -58,7 +58,7 @@
                     </h3>
 
                     <p class="text-sm text-slate-600 mt-2">
-                        <span class="font-medium">Código:</span>
+                        <span class="font-medium">CÃ³digo:</span>
                         {{ cotizacion.codigo }}
                     </p>
 
@@ -68,7 +68,7 @@
                     </p>
 
                     <p class="text-sm text-slate-600 mt-1">
-                        <span class="font-medium">Médico:</span>
+                        <span class="font-medium">MÃ©dico:</span>
                         {{ obtenerNombreMedico(cotizacion) }}
                     </p>
 
@@ -114,7 +114,7 @@
                         class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
                         aria-label="Cerrar"
                     >
-                        ✕
+                        âœ•
                     </button>
                 </div>
 
@@ -123,7 +123,7 @@
                 </div>
 
                 <div v-else-if="!cotizacionSeleccionada" class="px-5 py-10 text-center text-slate-500">
-                    No se pudo cargar la información.
+                    No se pudo cargar la informaciÃ³n.
                 </div>
 
                 <div v-else class="px-5 py-5 space-y-6 text-sm text-slate-700">
@@ -136,9 +136,9 @@
                         <div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
                             <p class="text-xs uppercase tracking-wide text-slate-500">Resumen</p>
                             <p class="mt-2"><span class="font-semibold">Fecha:</span> {{ formatearFechaHora(cotizacionSeleccionada.created_at || cotizacionSeleccionada.fecha_recepcion) }}</p>
-                            <p class="mt-1"><span class="font-semibold">Médico:</span> {{ cotizacionSeleccionada.medico?.nombre || 'No especificado' }}</p>
+                            <p class="mt-1"><span class="font-semibold">MÃ©dico:</span> {{ cotizacionSeleccionada.medico?.nombre || 'No especificado' }}</p>
                             <p class="mt-1"><span class="font-semibold">Entidad:</span> {{ cotizacionSeleccionada.entidad?.nombre || cotizacionSeleccionada.paciente?.entidad?.nombre || 'No especificada' }}</p>
-                            <p v-if="cotizacionSeleccionada.codificacion?.numero_autorizacion" class="mt-1"><span class="font-semibold">Autorización:</span> {{ cotizacionSeleccionada.codificacion.numero_autorizacion }}</p>
+                            <p v-if="cotizacionSeleccionada.codificacion?.numero_autorizacion" class="mt-1"><span class="font-semibold">AutorizaciÃ³n:</span> {{ cotizacionSeleccionada.codificacion.numero_autorizacion }}</p>
                             <p class="mt-1"><span class="font-semibold">Estado:</span> {{ cotizacionSeleccionada.estado?.nombre || 'Sin estado' }}</p>
                         </div>
                     </section>
@@ -163,83 +163,34 @@
                         </table>
                     </section>
 
-                    <section v-if="tipoVista(cotizacionSeleccionada) === 'codificación'" class="grid gap-4 lg:grid-cols-2">
-                        <div v-if="insumosModal.length > 0" class="rounded-xl border border-slate-200 overflow-hidden">
-                            <div class="bg-[#172a83] px-4 py-2 text-white font-semibold">INSUMOS</div>
-                            <table class="min-w-full text-left text-xs">
-                                <thead class="bg-slate-100 text-slate-700">
-                                    <tr>
-                                        <th class="px-3 py-2">Código</th>
-                                        <th class="px-3 py-2">Nombre</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(detalle, index) in insumosModal" :key="`modal-insumo-${index}`" class="border-t border-slate-200">
-                                        <td class="px-3 py-2">{{ detalle.codigo }}</td>
-                                        <td class="px-3 py-2">{{ detalle.nombre }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                    <section class="rounded-xl border border-slate-200 overflow-hidden">
+                        <div class="bg-[#172a83] px-4 py-2 text-white font-semibold flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <span>LIQUIDACIÓN</span>
+                            <span class="text-xs sm:text-sm">VALOR TOTAL: {{ formatearMoneda(totalLiquidacionModal) }}</span>
                         </div>
-
-                        <div v-if="lentesModal.length > 0" class="rounded-xl border border-slate-200 overflow-hidden">
-                            <div class="bg-[#172a83] px-4 py-2 text-white font-semibold">LENTES</div>
-                            <table class="min-w-full text-left text-xs">
-                                <thead class="bg-slate-100 text-slate-700">
-                                    <tr>
-                                        <th class="px-3 py-2">Código</th>
-                                        <th class="px-3 py-2">Nombre</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(detalle, index) in lentesModal" :key="`modal-lente-${index}`" class="border-t border-slate-200">
-                                        <td class="px-3 py-2">{{ detalle.codigo }}</td>
-                                        <td class="px-3 py-2">{{ detalle.nombre }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <table class="min-w-full text-left text-xs">
+                            <thead class="bg-slate-100 text-slate-700">
+                                <tr>
+                                    <th class="px-3 py-2">Nombre</th>
+                                    <th class="px-3 py-2 text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, index) in liquidacionModal" :key="`modal-liquidacion-${index}`" class="border-t border-slate-200">
+                                    <td class="px-3 py-2 font-medium text-slate-800">{{ item.nombre }}</td>
+                                    <td class="px-3 py-2 text-right font-semibold text-slate-900">{{ formatearMoneda(item.valor) }}</td>
+                                </tr>
+                                <tr v-if="!liquidacionModal.length" class="border-t border-slate-200">
+                                    <td colspan="2" class="px-3 py-4 text-center text-slate-500">Sin valores de liquidación registrados.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </section>
 
-                    <section v-if="tipoVista(cotizacionSeleccionada) === 'codificación'" class="rounded-xl border border-slate-200 overflow-hidden">
-                        <div class="bg-[#172a83] px-4 py-2 text-white font-semibold">VALORES</div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 text-xs">
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Lente</span>
-                                <span>{{ formatearNumeroSinDecimales(valorLentesCodificacion) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Auxilio de lente</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.auxilio_lente) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Insumos</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.insumos) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Copago</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.copago) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Excedente tope</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.excedente_tope) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Pre anestesia</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.pre_anestesia) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Otros costos</span>
-                                <span>{{ formatearNumeroSinDecimales(cotizacionSeleccionada.codificacion?.otros_costos) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Fecha de vigencia</span>
-                                <span>{{ formatearFechaSoloDia(cotizacionSeleccionada.codificacion?.fecha_vigencia) }}</span>
-                            </div>
-                            <div class="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
-                                <span class="font-semibold">Fecha de autorización</span>
-                                <span>{{ formatearFechaSoloDia(cotizacionSeleccionada.codificacion?.fecha_autorizacion) }}</span>
-                            </div>
+                    <section class="rounded-xl border border-slate-200 overflow-hidden">
+                        <div class="bg-[#172a83] px-4 py-2 text-white font-semibold">OBSERVACIONES</div>
+                        <div class="min-h-20 bg-slate-50 px-4 py-3 text-sm whitespace-pre-line">
+                            {{ cotizacionSeleccionada.observaciones || 'Sin observaciones.' }}
                         </div>
                     </section>
                 </div>
@@ -264,8 +215,8 @@ const cargandoDetalle = ref(false)
 const fetchCotizaciones = async () => {
     if (!search.value.trim()) {
         push.warning({
-            title: "Campo vacío",
-            message: "Por favor ingresa un número de historia"
+            title: "Campo vacÃ­o",
+            message: "Por favor ingresa un nÃºmero de historia"
         })
         return
     }
@@ -280,19 +231,19 @@ const fetchCotizaciones = async () => {
         if (!resultado || !resultado.value) {
             push.warning({
                 title: "Sin resultados",
-                message: "No se encontraron cotizaciones para ese número de historia"
+                message: "No se encontraron cotizaciones para ese nÃºmero de historia"
             })
             return
         }
         
-        // Si la respuesta es una sola cotización, la convertimos en array
+        // Si la respuesta es una sola cotizaciÃ³n, la convertimos en array
         const datos = Array.isArray(resultado.value) ? resultado.value : [resultado.value]
         
         // Validar que haya datos en el array
         if (datos.length === 0 || !datos[0]) {
             push.warning({
                 title: "Sin resultados",
-                message: "No se encontraron cotizaciones para ese número de historia"
+                message: "No se encontraron cotizaciones para ese nÃºmero de historia"
             })
             return
         }
@@ -300,13 +251,13 @@ const fetchCotizaciones = async () => {
         cotizaciones.value = datos
         
         push.success({
-            title: "Búsqueda exitosa",
-            message: `Se encontró${cotizaciones.value.length > 1 ? 'ron' : ''} ${cotizaciones.value.length} cotización${cotizaciones.value.length > 1 ? 'es' : ''}`
+            title: "BÃºsqueda exitosa",
+            message: `Se encontrÃ³${cotizaciones.value.length > 1 ? 'ron' : ''} ${cotizaciones.value.length} cotizaciÃ³n${cotizaciones.value.length > 1 ? 'es' : ''}`
         })
     } catch (error) {
         push.error({
             title: "Error",
-            message: error.message || "No se pudo realizar la búsqueda"
+            message: error.message || "No se pudo realizar la bÃºsqueda"
         })
     } finally {
         cargando.value = false
@@ -330,7 +281,7 @@ const abrirDetalle = async (cotizacion) => {
         if (error.value) {
             push.error({
                 title: "Error",
-                message: "No se pudo cargar el detalle de la cotización"
+                message: "No se pudo cargar el detalle de la cotizaciÃ³n"
             })
             mostrarModalDetalle.value = false
             return
@@ -340,7 +291,7 @@ const abrirDetalle = async (cotizacion) => {
     } catch (error) {
         push.error({
             title: "Error",
-            message: "No se pudo cargar el detalle de la cotización"
+            message: "No se pudo cargar el detalle de la cotizaciÃ³n"
         })
         mostrarModalDetalle.value = false
     } finally {
@@ -380,18 +331,6 @@ const formatearFechaHora = (fecha) => {
     }).format(valor)
 }
 
-const formatearFechaSoloDia = (fecha) => {
-    if (!fecha) return 'N/A'
-
-    const match = String(fecha).match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (match) {
-        const [, anio, mes, dia] = match
-        return `${dia}/${mes}/${anio}`
-    }
-
-    return formatearFecha(fecha)
-}
-
 const obtenerNombreMedico = (cotizacion) => {
     if (cotizacion.medico) {
         return `${cotizacion.medico.nombre}`.trim()
@@ -406,28 +345,28 @@ const obtenerPrimerProcedimiento = (cotizacion) => {
     return "Sin procedimientos"
 }
 
-const tipoVista = (cotizacion) => cotizacion?.tipo_gestion === 'codificación' ? 'codificación' : 'cotización'
+const tipoVista = (cotizacion) => cotizacion?.tipo_gestion === 'codificaciÃ³n' ? 'codificaciÃ³n' : 'cotizaciÃ³n'
 
 const procedimientosModal = computed(() => {
     if (!cotizacionSeleccionada.value?.items) return []
 
-    const vistos = new Set()
-    return cotizacionSeleccionada.value.items.filter((item) => {
-        const clave = `${item.codigo || ''}-${item.nombre || ''}-${item.lateralidad || ''}`
-        if (vistos.has(clave)) return false
-        vistos.add(clave)
-        return true
+    const grupos = new Map()
+
+    cotizacionSeleccionada.value.items.forEach((item) => {
+        const codigo = String(item.codigo || '').trim()
+        const lateralidad = String(item.lateralidad || '').trim()
+        const clave = `${codigo}-${lateralidad}`
+
+        if (!codigo || grupos.has(clave)) return
+
+        grupos.set(clave, {
+            codigo,
+            nombre: item.nombre || item.connom || 'Sin nombre',
+            lateralidad: lateralidad || '-',
+        })
     })
-})
 
-const insumosModal = computed(() => {
-    if (!cotizacionSeleccionada.value?.detalles) return []
-    return cotizacionSeleccionada.value.detalles.filter((detalle) => detalle.tipo !== 'L')
-})
-
-const lentesModal = computed(() => {
-    if (!cotizacionSeleccionada.value?.detalles) return []
-    return cotizacionSeleccionada.value.detalles.filter((detalle) => detalle.tipo === 'L')
+    return Array.from(grupos.values())
 })
 
 const valorLentesCodificacion = computed(() => {
@@ -436,6 +375,88 @@ const valorLentesCodificacion = computed(() => {
     const auxilio = Number(cotizacionSeleccionada.value.codificacion.auxilio_lente || 0)
     return Math.max(base - auxilio, 0)
 })
+
+const totalDetallePorTipo = (tipo) => {
+    const detalles = Array.isArray(cotizacionSeleccionada.value?.detalles)
+        ? cotizacionSeleccionada.value.detalles
+        : []
+
+    return detalles
+        .filter((detalle) => tipo === 'L' ? detalle.tipo === 'L' : detalle.tipo !== 'L')
+        .reduce((sum, detalle) => {
+            const cantidad = Number(detalle.cantidad || 1) || 1
+            const valor = Number(detalle.valor || 0) || 0
+            return sum + (valor * cantidad)
+        }, 0)
+}
+
+const getConceptoLabel = (concepto, connom) => {
+    const c = String(concepto || '').trim()
+    const name = String(connom || '').trim()
+
+    if (c === 'DP' || /DERECHOS/i.test(name)) return 'DERECHOS CLINICOS'
+    if (c === 'HANQ' || /ANEST/i.test(name)) return 'HONORARIOS DE ANESTESIOLOGO'
+    if (c === 'HMDQ' || /CIRUJANO/i.test(name)) return 'HONORARIOS CIRUJANO'
+    if (c === 'HMLA' || /MEDICOS LASER/i.test(name)) return 'HONORARIOS MEDICOS LASER'
+    if (c === 'LASH' || /LASER/i.test(name)) return 'DERECHOS CLINICOS LASER'
+    if (!c) return name || 'HONORARIOS MEDICOS'
+
+    return name || c
+}
+
+const conceptosLiquidacionModal = computed(() => {
+    const items = Array.isArray(cotizacionSeleccionada.value?.items)
+        ? cotizacionSeleccionada.value.items
+        : []
+    const grupos = new Map()
+
+    items.forEach((item) => {
+        const concepto = item.concepto || 'SIN_CONCEPTO'
+        const connom = item.connom || item.nombre_concepto || ''
+        const key = `${concepto}-${connom}`
+        const cantidad = Number(item.cantidad || 1) || 1
+        const valor = Number(item.valor || item.valor_unitario || 0) || 0
+
+        if (!grupos.has(key)) {
+            grupos.set(key, {
+                nombre: getConceptoLabel(concepto, connom),
+                valor: 0,
+            })
+        }
+
+        grupos.get(key).valor += valor * cantidad
+    })
+
+    return Array.from(grupos.values()).filter((item) => Number(item.valor || 0) > 0)
+})
+
+const totalLentesModal = computed(() => {
+    const totalDetalle = totalDetallePorTipo('L')
+    return totalDetalle > 0 ? totalDetalle : Number(valorLentesCodificacion.value || 0)
+})
+
+const totalInsumosModal = computed(() => {
+    const totalDetalle = totalDetallePorTipo('I')
+    const totalCodificacion = Number(cotizacionSeleccionada.value?.codificacion?.insumos || 0)
+    return totalDetalle > 0 ? totalDetalle : totalCodificacion
+})
+
+const polizaModal = computed(() => cotizacionSeleccionada.value?.poliza || null)
+const valorPolizaModal = computed(() => Number(polizaModal.value?.valor_poliza ?? cotizacionSeleccionada.value?.valor_poliza ?? 0) || 0)
+
+const liquidacionModal = computed(() => {
+    const rows = [...conceptosLiquidacionModal.value]
+
+    if (totalLentesModal.value > 0) rows.push({ nombre: 'LENTE INTRAOCULAR', valor: totalLentesModal.value })
+    if (totalInsumosModal.value > 0) rows.push({ nombre: 'INSUMOS', valor: totalInsumosModal.value })
+    if (valorPolizaModal.value > 0) rows.push({ nombre: 'POLIZA', valor: valorPolizaModal.value })
+
+    return rows
+})
+
+const totalLiquidacionModal = computed(() =>
+    liquidacionModal.value.reduce((sum, item) => sum + (Number(item.valor) || 0), 0)
+)
 
 const formatearNumero = (valor, decimals = 2) => {
     if (valor === null || valor === undefined) return '0,00'
@@ -451,5 +472,5 @@ const formatearNumero = (valor, decimals = 2) => {
     }).format(numero)
 }
 
-const formatearNumeroSinDecimales = (valor) => formatearNumero(valor, 0)
+const formatearMoneda = (valor) => `$${formatearNumero(valor, 0)}`
 </script>

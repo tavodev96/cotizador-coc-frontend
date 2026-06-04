@@ -83,6 +83,7 @@ const formFields = {
 
 const lenteVisible = ref('0');
 
+const { codificacion } = useCotizacionForm();
 const { copago, excedenteTope, auxilioLente, preAnestesia, otros, fechaVigencia, fechaAutorizacion } = formFields;
 
 const limpiarNumero = (valor) => Number(String(valor ?? '').replace(/[^\d]/g, '')) || 0;
@@ -107,7 +108,6 @@ const syncLenteVisible = () => {
 
 const fechaMinima = computed(() => {
     const hoy = new Date();
-    hoy.setDate(hoy.getDate() + 1); // Suma un día
     return hoy.toISOString().split('T')[0];
 });
 
@@ -144,6 +144,20 @@ const handleBlur = (key) => {
     emit('update:valores', dataToSend);
 };
 
+const hydrateFromParent = (value) => {
+    if (!value) return;
+
+    copago.value = formatearNumero(value.copago || 0);
+    excedenteTope.value = formatearNumero(value.excedenteTope || 0);
+    auxilioLente.value = formatearNumero(value.auxilioLente || 0);
+    preAnestesia.value = formatearNumero(value.preAnestesia || 0);
+    otros.value = formatearNumero(value.otros || 0);
+    fechaVigencia.value = value.fechaVigencia || '';
+    fechaAutorizacion.value = value.fechaAutorizacion || '';
+    syncLenteVisible();
+}
+
+watch(codificacion, hydrateFromParent, { immediate: true, deep: true })
 
 watch(() => props.lentes, () => {
     syncLenteVisible();

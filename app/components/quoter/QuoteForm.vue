@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-6xl mx-auto shadow-sm">
         <div v-if="extracting" class="max-w-5xl mx-auto p-6 bg-white border border-slate-200 rounded-2xl">
             <div class="flex justify-center items-center gap-2">
@@ -121,6 +121,17 @@
                 <input type="text" :value="new Date().toISOString().split('T')[0]"
                     class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-slate-100" disabled />
 
+                <div v-if="props.mode === 'edit' && !isCodificacion">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Fecha de inicio de nueva vigencia</label>
+                    <input
+                        v-model="cotizacion.fecha_vigencia"
+                        type="date"
+                        :min="fechaMinimaVigencia"
+                        class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
+                    />
+                    <p class="mt-1 text-xs text-slate-500">Al guardar, desde esta fecha se cuentan 30 días para calcular la nueva fecha de vencimiento.</p>
+                </div>
+
                 <div :class="[{ 'flex items-center justify-center gap-2 mt-4': isCodificacion }]">
                     <div :class="[{ 'w-1/2': isCodificacion, 'w-full mt-4': !isCodificacion }]">
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Tipo de gestión</label>
@@ -208,6 +219,19 @@
                         </template>
                         <p v-else class="px-3 py-2 text-sm text-slate-500">Sin resultados</p>
                     </div>
+                </div>
+
+                <div v-if="polizas.length" class="mt-4">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Póliza</label>
+                    <select v-model="cotizacion.poliza_id" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white">
+                        <option value="" disabled>Seleccionar póliza</option>
+                        <option v-for="poliza in polizas" :key="poliza.id" :value="poliza.id">
+                            {{ poliza.nombre }} — Valor asegurado: {{ formatCurrency(poliza.valor_asegurado) }} · Valor póliza: {{ formatCurrency(poliza.valor_poliza) }}
+                        </option>
+                    </select>
+                    <p v-if="polizaSeleccionada" class="mt-2 text-sm text-slate-600">
+                        Se sumará {{ formatCurrency(polizaSeleccionada.valor_poliza) }} al total de la cotización.
+                    </p>
                 </div>
 
                 <div class="md:col-span-2 mt-4">
@@ -555,8 +579,10 @@ definePageMeta({
 const props = defineProps({
     mode: { type: String, required: true }, // create | edit
 })
+const emit = defineEmits(['saved'])
 
 import { Notivue, Notification, filledIcons } from 'notivue'
+import { nextTick } from 'vue'
 const { getById, create, update } = useCotizacionApi()
 const { paciente, cotizacion, codificacion, totalCotizacion, totalInsumos, totalLentes } = useCotizacionForm()
 const route = useRoute();
@@ -565,6 +591,7 @@ const router = useRouter();
 const entidades = ref([])
 const medicos = ref([])
 const consultorios = ref([])
+const polizas = ref([])
 const tiposGestion = ['cotización', 'información', 'codificación']
 const lateralidad = ['izquierda', 'derecha', 'bilateral']
 const tiposIdentificacion = ['CC', 'CE', 'TI', 'PA']
@@ -578,6 +605,7 @@ const mostrarDropdownMedico = ref(false)
 const mostrarDropdownConsultorio = ref(false)
 
 const showModal = ref(false)
+const entidadFromQueryIsNA = ref(false)
 const resultadosCodigo = ref([])
 const itemSeleccionadoIndex = ref(null)
 // const codigoSeleccionado = ref(null)
@@ -639,6 +667,7 @@ const seleccionarEntidad = (entidad) => {
     paciente.value.entidad_id = Number(entidad.id)
     buscadorEntidad.value = entidad.nombre
     mostrarDropdownEntidad.value = false
+    entidadFromQueryIsNA.value = false
 }
 
 const handleEntidadInput = () => {
@@ -647,8 +676,12 @@ const handleEntidadInput = () => {
 
     if (!termino) {
         paciente.value.entidad_id = ''
+        entidadFromQueryIsNA.value = false
+    } else if (entidadFromQueryIsNA.value && termino.toLowerCase() === 'n/a') {
+        // Keep the preloaded PARTICULARES entity while the field renders N/A.
     } else if (entidadSeleccionada && normalizar(entidadSeleccionada.nombre) !== normalizar(termino)) {
         paciente.value.entidad_id = ''
+        entidadFromQueryIsNA.value = false
     }
 
     mostrarDropdownEntidad.value = true
@@ -723,7 +756,9 @@ watch(
     () => {
         if (!paciente.value.entidad_id) return
         const entidad = entidades.value.find((e) => Number(e.id) === Number(paciente.value.entidad_id))
-        buscadorEntidad.value = entidad?.nombre || buscadorEntidad.value
+        if (!entidad) return
+
+        buscadorEntidad.value = entidad.nombre || buscadorEntidad.value
     },
     { immediate: true }
 )
@@ -870,6 +905,7 @@ onMounted(async () => {
             medicos.value = data.value.data.value.medicos
             consultorios.value = data.value.data.value.consultorios
             entidades.value = data.value.data.value.entidades
+            polizas.value = data.value.data.value.polizas || []
         }
 
         if (route.query) {
@@ -879,9 +915,10 @@ onMounted(async () => {
                 paciente.value.numero_identificacion = route.query.numero_identificacion
                 await buscarPaciente()
             }
-            syncEntidadFromQuery()
+            await syncEntidadFromQuery()
             syncMedicoFromQuery()
             syncConsultorioFromQuery()
+            syncPolizaFromQuery()
 
             const codigosDesdeQuery = [
                 ...parseQueryValues(route.query.codigos, ','),
@@ -914,15 +951,54 @@ const isCodificacion = computed(() => {
     return cotizacion.value.tipo_gestion === 'codificación'
 })
 
-const syncEntidadFromQuery = () => {
-    const q = route.query?.entidad
-    if (!q || !entidades.value.length) return
+const fechaMinimaVigencia = computed(() => new Date().toISOString().split('T')[0])
 
-    const match = entidades.value.find(
-        e => String(e.nombre).trim().toLowerCase() === String(q).trim().toLowerCase()
+const polizaSeleccionada = computed(() => {
+    const id = cotizacion.value.poliza_id
+    if (!id) return null
+    return polizas.value.find((poliza) => Number(poliza.id) === Number(id)) || null
+})
+
+watch(polizaSeleccionada, (poliza) => {
+    cotizacion.value.poliza = poliza || null
+    cotizacion.value.valor_poliza = Number(poliza?.valor_poliza || 0)
+}, { immediate: true })
+
+const syncEntidadFromQuery = async () => {
+    await nextTick()
+    const q = String(route.query?.entidad || '').trim()
+    if (!entidades.value.length) return
+
+    entidadFromQueryIsNA.value = false
+    const idQuery = String(route.query?.entidad_id || '').trim()
+
+    if (idQuery && !Number.isNaN(Number(idQuery))) {
+        const matchById = entidades.value.find((e) => Number(e.id) === Number(idQuery))
+        if (matchById) {
+            paciente.value.entidad_id = Number(matchById.id)
+            buscadorEntidad.value = matchById.nombre
+            return
+        }
+    }
+
+    const matchByName = entidades.value.find(
+        e => normalizar(e.nombre) === normalizar(q)
     )
-    if (match) {
-        paciente.value.entidad_id = Number(match.id)
+    if (matchByName) {
+        paciente.value.entidad_id = Number(matchByName.id)
+        buscadorEntidad.value = matchByName.nombre
+        return
+    }
+
+    if (['n/a', 'na'].includes(normalizar(q))) {
+        const particulares = entidades.value.find((e) => normalizar(e.nombre) === 'particulares')
+            || entidades.value.find((e) => normalizar(e.nombre).includes('particulares'))
+
+        if (particulares) {
+            paciente.value.entidad_id = Number(particulares.id)
+            entidadFromQueryIsNA.value = true
+            buscadorEntidad.value = particulares.nombre || 'PARTICULARES'
+        }
     }
 }
 
@@ -940,6 +1016,15 @@ const syncMedicoFromQuery = () => {
     }
 }
 
+watch(
+    () => [String(route.query?.entidad || ''), String(route.query?.entidad_id || ''), entidades.value.length],
+    ([entidadQuery, entidadId, entidadesCount]) => {
+        if (!entidadesCount) return
+        if (!entidadQuery && !entidadId) return
+        syncEntidadFromQuery()
+    },
+    { immediate: true }
+)
 
 const syncConsultorioFromQuery = () => {
 
@@ -952,6 +1037,16 @@ const syncConsultorioFromQuery = () => {
     if (match) {
         isconsultorioDisabled.value = true;
         cotizacion.value.consultorio_id = Number(match.id)
+    }
+}
+
+const syncPolizaFromQuery = () => {
+    const q = String(route.query?.poliza_id || '').trim()
+    if (!q || !polizas.value.length) return
+
+    const match = polizas.value.find((p) => Number(p.id) === Number(q))
+    if (match) {
+        cotizacion.value.poliza_id = Number(match.id)
     }
 }
 
@@ -1450,10 +1545,12 @@ const guardarCotizacion = async () => {
         let payload = {
             origen: cotizacion.value.origen,
             fecha_ordenamiento: fechaOrdenamiento.value || null,
+            fecha_inicio_vigencia: cotizacion.value.fecha_vigencia || null,
             tipo_gestion: cotizacion.value.tipo_gestion,
             medico_id: cotizacion.value.medico_id,
             entidad_id: paciente.value.entidad_id,
             consultorio_id: cotizacion.value.consultorio_id,
+            poliza_id: cotizacion.value.poliza_id || null,
             observaciones: cotizacion.value.observaciones,
 
             // 🔹 Procedimientos
@@ -1540,13 +1637,16 @@ const guardarCotizacion = async () => {
 
         if (props.mode === 'edit') {
             pushNotification('success', `Cotización editada con código:\n${apiData.codigo}`, 'Éxito');
+            emit('saved', apiData)
         } else {
             pushNotification('success', `Cotización creada con código:\n${apiData.codigo}`, 'Éxito');
         }
 
+        if (props.mode === 'edit') return
+
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
-        cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', items: [], insumos: [], lentes: [] }
+        cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '' };
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;

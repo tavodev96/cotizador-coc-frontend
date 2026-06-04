@@ -4,6 +4,23 @@
             <h1 class="text-2xl font-semibold text-slate-900">Editar cotización</h1>
             <p class="text-sm text-slate-600 mt-1">Actualiza la información manteniendo la estructura existente.</p>
         </div>
+        <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p class="text-sm font-semibold text-slate-700 mb-2">Historial de vigencia</p>
+                <div v-if="loadingAuditoriaLogs" class="text-sm text-slate-500">Cargando historial...</div>
+                <div v-else>
+                    <template v-if="vigenciaLogs.length">
+                        <ul class="space-y-3">
+                            <li v-for="(log, index) in vigenciaLogs" :key="index" class="rounded-lg border border-slate-200 p-3 bg-white">
+                                <div class="text-xs text-slate-500">{{ log.fecha }} · {{ log.usuario }}</div>
+                                <div class="text-sm text-slate-700 mt-1">{{ log.descripcion }}</div>
+                            </li>
+                        </ul>
+                    </template>
+                    <div v-else class="text-sm text-slate-500">No hay cambios de vigencia registrados.</div>
+                </div>
+            </div>
+        </div>
         <div v-if="loading" class="p-6 text-center flex flex-col items-center gap-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
             <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
@@ -11,7 +28,7 @@
             </svg>
             <div class="text-slate-700">Consultando información para editar…</div>
         </div>
-        <QuoteForm v-else mode="edit" @submit="guardar" />
+        <QuoteForm v-else mode="edit" @saved="fetchAuditoriaLogs" />
     </div>
 </template>
 
@@ -23,12 +40,33 @@ definePageMeta({
 import QuoteForm from '../../../components/quoter/QuoteForm.vue'
 
 const route = useRoute()
-const router = useRouter()
 
-const { getById, update } = useCotizacionApi()
+const { getById } = useCotizacionApi()
 const { paciente, cotizacion, codificacion } = useCotizacionForm()
 
 const loading = ref(true)
+const auditoriaLogs = ref([])
+const loadingAuditoriaLogs = ref(false)
+
+const vigenciaLogs = computed(() =>
+    auditoriaLogs.value.filter(
+        (log) =>
+            log.campo === 'codificacion.fecha_vigencia' ||
+            log.campo === 'fecha_vigencia' ||
+            String(log.descripcion || '').toLowerCase().includes('vigencia')
+    )
+)
+
+const fetchAuditoriaLogs = async () => {
+    loadingAuditoriaLogs.value = true
+    const { data, error } = await useSanctumFetch(`/api/auditoria/cotizacion/${route.params.id}`)
+
+    if (!error.value && data.value) {
+        auditoriaLogs.value = data.value
+    }
+
+    loadingAuditoriaLogs.value = false
+}
 
 onMounted(async () => {
     const { data, error } = await getById(route.params.id)
@@ -60,6 +98,10 @@ onMounted(async () => {
         medico_id: c.cotizacion.medico_id,
         consultorio_id: c.cotizacion.consultorio_id,
         observaciones: c.cotizacion.observaciones,
+        poliza_id: c.cotizacion.poliza_id || '',
+        poliza: c.cotizacion.poliza || null,
+        valor_poliza: Number(c.cotizacion.poliza?.valor_poliza ?? c.cotizacion.valor_poliza ?? 0),
+        fecha_vigencia: '',
         items: c.cotizacion.items.map(i => ({
             ...i,
             valor: Number(i.valor) || 0,
@@ -102,14 +144,7 @@ onMounted(async () => {
     }
 
     loading.value = false
+    await fetchAuditoriaLogs()
 })
-
-const guardar = async () => {
-    await update(route.params.id, {
-        paciente: paciente.value,
-        cotizacion: cotizacion.value,
-        codificacion: codificacion.value,
-    })
-}
 
 </script>
