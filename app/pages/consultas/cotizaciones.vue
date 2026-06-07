@@ -3,7 +3,7 @@
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
             <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Consultar cotizaciones</h1>
             <p class="text-sm text-slate-600">
-                Busca con nÃºmero de identificaciÃ³n del paciente en
+                Busca por número de identificación del paciente en
                 <span class="uppercase text-indigo-700 font-semibold">Servinte</span>.
             </p>
 
@@ -11,7 +11,7 @@
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="NÃºmero de identificaciÃ³n del paciente"
+                    placeholder="Número de identificación del paciente"
                     class="w-full md:max-w-sm h-11 border border-slate-300 rounded-lg px-3 bg-white"
                     @keyup.enter="fetchCotizaciones"
                     :disabled="cargando"
@@ -44,7 +44,7 @@
             </div>
 
             <div v-else-if="cotizaciones.length === 0" class="py-10 text-center text-slate-500">
-                No hay cotizaciones para mostrar. Realiza una bÃºsqueda.
+                No hay cotizaciones para mostrar. Realiza una búsqueda.
             </div>
 
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -58,7 +58,7 @@
                     </h3>
 
                     <p class="text-sm text-slate-600 mt-2">
-                        <span class="font-medium">CÃ³digo:</span>
+                        <span class="font-medium">Código:</span>
                         {{ cotizacion.codigo }}
                     </p>
 
@@ -68,7 +68,7 @@
                     </p>
 
                     <p class="text-sm text-slate-600 mt-1">
-                        <span class="font-medium">MÃ©dico:</span>
+                        <span class="font-medium">Médico:</span>
                         {{ obtenerNombreMedico(cotizacion) }}
                     </p>
 
@@ -114,7 +114,7 @@
                         class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
                         aria-label="Cerrar"
                     >
-                        âœ•
+                         ×
                     </button>
                 </div>
 
@@ -123,7 +123,7 @@
                 </div>
 
                 <div v-else-if="!cotizacionSeleccionada" class="px-5 py-10 text-center text-slate-500">
-                    No se pudo cargar la informaciÃ³n.
+                    No se pudo cargar la información.
                 </div>
 
                 <div v-else class="px-5 py-5 space-y-6 text-sm text-slate-700">
@@ -136,10 +136,18 @@
                         <div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
                             <p class="text-xs uppercase tracking-wide text-slate-500">Resumen</p>
                             <p class="mt-2"><span class="font-semibold">Fecha:</span> {{ formatearFechaHora(cotizacionSeleccionada.created_at || cotizacionSeleccionada.fecha_recepcion) }}</p>
-                            <p class="mt-1"><span class="font-semibold">MÃ©dico:</span> {{ cotizacionSeleccionada.medico?.nombre || 'No especificado' }}</p>
+                            <p class="mt-1"><span class="font-semibold">Médico:</span> {{ cotizacionSeleccionada.medico?.nombre || 'No especificado' }}</p>
                             <p class="mt-1"><span class="font-semibold">Entidad:</span> {{ cotizacionSeleccionada.entidad?.nombre || cotizacionSeleccionada.paciente?.entidad?.nombre || 'No especificada' }}</p>
-                            <p v-if="cotizacionSeleccionada.codificacion?.numero_autorizacion" class="mt-1"><span class="font-semibold">AutorizaciÃ³n:</span> {{ cotizacionSeleccionada.codificacion.numero_autorizacion }}</p>
+                            <p v-if="cotizacionSeleccionada.codificacion?.numero_autorizacion" class="mt-1"><span class="font-semibold">Autorización:</span> {{ cotizacionSeleccionada.codificacion.numero_autorizacion }}</p>
                             <p class="mt-1"><span class="font-semibold">Estado:</span> {{ cotizacionSeleccionada.estado?.nombre || 'Sin estado' }}</p>
+                            <div v-if="tarifasProcedimientoModal.length" class="mt-2">
+                                <p class="font-semibold">Tarifa{{ tarifasProcedimientoModal.length === 1 ? '' : 's' }} del procedimiento:</p>
+                                <ul class="mt-1 space-y-1">
+                                    <li v-for="tarifa in tarifasProcedimientoModal" :key="tarifa.key">
+                                        {{ tarifa.codigo }} - {{ tarifa.nombre }}
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </section>
 
@@ -215,8 +223,8 @@ const cargandoDetalle = ref(false)
 const fetchCotizaciones = async () => {
     if (!search.value.trim()) {
         push.warning({
-            title: "Campo vacÃ­o",
-            message: "Por favor ingresa un nÃºmero de historia"
+            title: "Campo vacío",
+            message: "Por favor ingresa un número de historia"
         })
         return
     }
@@ -231,19 +239,19 @@ const fetchCotizaciones = async () => {
         if (!resultado || !resultado.value) {
             push.warning({
                 title: "Sin resultados",
-                message: "No se encontraron cotizaciones para ese nÃºmero de historia"
+                message: "No se encontraron cotizaciones para ese número de historia"
             })
             return
         }
         
-        // Si la respuesta es una sola cotizaciÃ³n, la convertimos en array
+        // Si la respuesta es una sola cotización, la convertimos en array
         const datos = Array.isArray(resultado.value) ? resultado.value : [resultado.value]
         
         // Validar que haya datos en el array
         if (datos.length === 0 || !datos[0]) {
             push.warning({
                 title: "Sin resultados",
-                message: "No se encontraron cotizaciones para ese nÃºmero de historia"
+                message: "No se encontraron cotizaciones para ese número de historia"
             })
             return
         }
@@ -251,13 +259,13 @@ const fetchCotizaciones = async () => {
         cotizaciones.value = datos
         
         push.success({
-            title: "BÃºsqueda exitosa",
-            message: `Se encontrÃ³${cotizaciones.value.length > 1 ? 'ron' : ''} ${cotizaciones.value.length} cotizaciÃ³n${cotizaciones.value.length > 1 ? 'es' : ''}`
+            title: "Búsqueda exitosa",
+            message: `Se encontró${cotizaciones.value.length > 1 ? 'ron' : ''} ${cotizaciones.value.length} cotización${cotizaciones.value.length > 1 ? 'es' : ''}`
         })
     } catch (error) {
         push.error({
             title: "Error",
-            message: error.message || "No se pudo realizar la bÃºsqueda"
+            message: error.message || "No se pudo realizar la búsqueda"
         })
     } finally {
         cargando.value = false
@@ -281,7 +289,7 @@ const abrirDetalle = async (cotizacion) => {
         if (error.value) {
             push.error({
                 title: "Error",
-                message: "No se pudo cargar el detalle de la cotizaciÃ³n"
+                message: "No se pudo cargar el detalle de la cotización"
             })
             mostrarModalDetalle.value = false
             return
@@ -291,7 +299,7 @@ const abrirDetalle = async (cotizacion) => {
     } catch (error) {
         push.error({
             title: "Error",
-            message: "No se pudo cargar el detalle de la cotizaciÃ³n"
+            message: "No se pudo cargar el detalle de la cotización"
         })
         mostrarModalDetalle.value = false
     } finally {
@@ -345,7 +353,37 @@ const obtenerPrimerProcedimiento = (cotizacion) => {
     return "Sin procedimientos"
 }
 
-const tipoVista = (cotizacion) => cotizacion?.tipo_gestion === 'codificaciÃ³n' ? 'codificaciÃ³n' : 'cotizaciÃ³n'
+const tipoVista = (cotizacion) => {
+    const tipo = String(cotizacion?.tipo_gestion || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+
+    return tipo === 'codificacion' ? 'codificación' : 'cotización'
+}
+
+const tarifasProcedimientoModal = computed(() => {
+    const items = Array.isArray(cotizacionSeleccionada.value?.items)
+        ? cotizacionSeleccionada.value.items
+        : []
+    const grupos = new Map()
+
+    items.forEach((item) => {
+        const codigo = String(item.tarifa || item.codigo_tarifa || item.protartar || '').trim()
+        const nombre = String(item.nombre_tarifa || item.tarnom || '').trim()
+        const key = `${codigo}-${nombre}`
+
+        if (!codigo || grupos.has(key)) return
+
+        grupos.set(key, {
+            key,
+            codigo,
+            nombre: nombre || 'Sin nombre',
+        })
+    })
+
+    return Array.from(grupos.values())
+})
 
 const procedimientosModal = computed(() => {
     if (!cotizacionSeleccionada.value?.items) return []

@@ -376,6 +376,22 @@ const formatMoney = (num) => {
   }).format(num || 0)
 }
 
+const limpiarNombreArchivo = (value) => {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+const nombreArchivoPdf = computed(() => {
+  const codigo = limpiarNombreArchivo(cotizacion.value?.codigo || 'cotizacion')
+  const paciente = limpiarNombreArchivo(cotizacion.value?.paciente?.nombre_completo || 'paciente')
+  const identificacion = limpiarNombreArchivo(cotizacion.value?.paciente?.numero_identificacion || 'sin_identificacion')
+
+  return `${codigo}_${paciente}_${identificacion}.pdf`
+})
+
 const toggleImprimirPaciente = () => {
   imprimirParaPaciente.value = !imprimirParaPaciente.value
   if (imprimirParaPaciente.value) {
@@ -588,7 +604,7 @@ const descargarPDF = async () => {
         const link = document.createElement('a')
 
         link.href = url
-        link.download = `Cotizacion_${cotizacion.value.codigo || 'nueva'}.pdf`
+        link.download = nombreArchivoPdf.value
         link.click()
         URL.revokeObjectURL(url)
 
@@ -708,6 +724,10 @@ const enviarCorreo = async () => {
           </div>
         </div>
         <div class="quote-patient-col">
+          <div class="quote-info-row">
+            <strong>Cotización:</strong>
+            <span>{{ cotizacion?.codigo || 'N/A' }}</span>
+          </div>
           <div class="quote-info-row">
             <strong>Fecha de Creación:</strong>
             <span>{{ fechaHoraCreacion }}</span>
