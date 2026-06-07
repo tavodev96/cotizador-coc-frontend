@@ -277,7 +277,17 @@
                                 class="p-2 border rounded w-full" />
                         </div>
 
-                        <div :class="[{ 'md:col-span-7': isCodificacion, 'md:col-span-4': !isCodificacion }]">
+                        <div class="md:col-span-1">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Concepto</label>
+                            <div
+                                class="p-2 border rounded w-full min-h-10 bg-slate-50 text-center text-sm font-semibold text-slate-700 truncate"
+                                :title="getNombreConcepto(item)"
+                            >
+                                {{ item.concepto || '-' }}
+                            </div>
+                        </div>
+
+                        <div :class="[{ 'md:col-span-6': isCodificacion, 'md:col-span-3': !isCodificacion }]">
                             <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre</label>
                             <input v-model="item.nombre" placeholder="Nombre"
                                 class="p-2 border rounded w-full" />
@@ -1225,6 +1235,20 @@ const formatearNumero = (valor) => {
 const formatCurrency = (valor) => {
     const numero = Number(valor) || 0;
     return numero.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+}
+
+const getNombreConcepto = (item) => {
+    const nombre = String(item?.connom || item?.nombre_concepto || '').trim()
+    const codigo = String(item?.concepto || '').trim()
+
+    if (nombre) return nombre
+    if (codigo === 'DP') return 'Derechos clínicos'
+    if (codigo === 'HANQ' || codigo === 'HA') return 'Honorarios anestesiólogo'
+    if (codigo === 'HMDQ' || codigo === 'HM') return 'Honorarios cirujano'
+    if (codigo === 'HMLA') return 'Honorarios médicos láser'
+    if (codigo === 'LASH') return 'Derechos clínicos láser'
+
+    return codigo ? `Concepto ${codigo}` : 'Sin concepto'
 }
 
 // Marcar/desmarcar paquete completo
