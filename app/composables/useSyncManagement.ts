@@ -10,6 +10,7 @@ type SyncPipeline =
   | 'recursos_consultorios'
   | 'pacientes_informix'
   | 'pacientes_nuevos_informix'
+  | 'pacientes_existentes_informix'
   | 'codigos_laser_procedimientos'
 
 type SyncStatus = {
