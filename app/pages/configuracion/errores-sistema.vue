@@ -13,6 +13,8 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const logs = ref<any[]>([])
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+const moduleOptions = ref<string[]>([])
+const userOptions = ref<Array<{ id: number; name: string; email?: string }>>([])
 
 const selectedLog = ref<any | null>(null)
 const showDetail = ref(false)
@@ -47,7 +49,7 @@ const fetchLogs = async (page = 1) => {
   try {
     const { data, error } = await useSanctumFetch('/api/system-errors', {
       method: 'GET',
-      params: buildParams(page),
+      query: buildParams(page),
     })
 
     if (error.value) {
@@ -56,6 +58,8 @@ const fetchLogs = async (page = 1) => {
     }
 
     logs.value = data.value?.data || []
+    moduleOptions.value = data.value?.filters?.modules || moduleOptions.value
+    userOptions.value = data.value?.filters?.users || userOptions.value
     pagination.value = {
       current_page: data.value?.current_page || 1,
       last_page: data.value?.last_page || 1,
@@ -156,19 +160,22 @@ onMounted(async () => {
           placeholder="Buscar error, clase o función"
           class="border border-slate-300 rounded-lg px-3 py-2 text-sm"
         />
-        <input
+        <select
           v-model="filters.module"
-          type="text"
-          placeholder="Módulo"
           class="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-        />
-        <input
+        >
+          <option value="">Todos los módulos</option>
+          <option v-for="module in moduleOptions" :key="module" :value="module">{{ module }}</option>
+        </select>
+        <select
           v-model="filters.user_id"
-          type="number"
-          min="1"
-          placeholder="ID Usuario"
           class="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-        />
+        >
+          <option value="">Todos los usuarios</option>
+          <option v-for="user in userOptions" :key="user.id" :value="String(user.id)">
+            {{ user.name }}{{ user.email ? ` - ${user.email}` : '' }}
+          </option>
+        </select>
         <input
           v-model="filters.date_from"
           type="date"
