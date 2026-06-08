@@ -261,6 +261,7 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
       estado: estadoId,
       comentario_cambio_estado: options.comentario || null,
       fecha_programada: Number(estadoId) === 5 ? (options.fechaProgramada || null) : null,
+      hora_programada: Number(estadoId) === 5 ? (options.horaProgramada || '00:00') : null,
     }
 
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
@@ -269,7 +270,7 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
     })
 
     if (error.value || !data.value?.success) {
-      pushNotification('error', 'No se pudo cambiar el estado', 'Error')
+      pushNotification('error', error.value?.data?.message || data.value?.message || 'No se pudo cambiar el estado', 'Error')
       return false
     }
 
@@ -521,6 +522,8 @@ const fechaAutorizacionFormateada = computed(() => {
   if (!valor) return ''
   return formatoFecha(valor)
 })
+
+const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_id) === 5)
 </script>
 
 <template>
@@ -601,11 +604,14 @@ const fechaAutorizacionFormateada = computed(() => {
             </option>
           </select>
           <input
-            v-if="Number(estadoSeleccionadoTemp) === 5"
+            v-if="Number(estadoSeleccionadoTemp) === 5 && !estadoActualEsProgramada"
             v-model="fechaProgramadaTemp"
             type="date"
             class="border border-slate-300 p-2 rounded-lg bg-white"
           />
+          <span v-else-if="Number(estadoSeleccionadoTemp) === 5 && estadoActualEsProgramada" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Fecha programada: {{ cotizacion?.fecha_programada || 'Sin fecha' }}. Modificar solo desde Programación.
+          </span>
           <button @click="cambiarEstado"
             class="flex justify-center items-center gap-2 bg-indigo-700 text-white px-4 py-2 rounded-lg"
             :disabled="loadingEstados">

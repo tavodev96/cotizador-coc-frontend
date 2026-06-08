@@ -57,6 +57,10 @@ const formatoFechaHoraProgramada = (fecha, hora) => {
   return `${fecha} ${normalizarHora24(hora)}`
 }
 
+const historialProgramacion = (cotizacion) => {
+  return Array.isArray(cotizacion?.historial_programacion) ? cotizacion.historial_programacion : []
+}
+
 const normalizarHora24 = (hora) => {
   if (!hora) return ''
   return String(hora).slice(0, 5)
@@ -476,6 +480,17 @@ onBeforeUnmount(() => {
               Fecha/Hora programada:
               <span class="font-medium text-slate-900">{{ formatoFechaHoraProgramada(c.fecha_programada, c.hora_programada) }}</span>
             </p>
+            <details v-if="historialProgramacion(c).length" class="mt-2 text-sm text-slate-700">
+              <summary class="cursor-pointer font-medium text-indigo-700">Histórico de programación ({{ historialProgramacion(c).length }})</summary>
+              <div class="mt-2 space-y-1 rounded-lg border border-slate-200 bg-white p-2">
+                <p v-for="log in historialProgramacion(c)" :key="log.id" class="text-xs text-slate-600">
+                  {{ formatoFechaHoraProgramada(log.fecha_anterior, log.hora_anterior) }} →
+                  <span class="font-semibold text-slate-800">{{ formatoFechaHoraProgramada(log.fecha_nueva, log.hora_nueva) }}</span>
+                  <span v-if="log.usuario?.name"> por {{ log.usuario.name }}</span>
+                  <span v-if="log.comentario">: {{ log.comentario }}</span>
+                </p>
+              </div>
+            </details>
           </div>
 
           <!-- Acciones -->
