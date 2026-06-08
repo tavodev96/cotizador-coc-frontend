@@ -25,6 +25,7 @@ const logsRequestInFlight = ref(false)
 
 const selectedLog = ref<any | null>(null)
 const showDetail = ref(false)
+const recentErrorOpenIds = ref<Set<number>>(new Set())
 
 const filters = ref({
   status: '',
@@ -158,6 +159,14 @@ const closeDetail = () => {
   showDetail.value = false
   selectedLog.value = null
 }
+
+const toggleRecentError = (id: number) => {
+  const next = new Set(recentErrorOpenIds.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  recentErrorOpenIds.value = next
+}
+
+const isRecentErrorOpen = (id: number) => recentErrorOpenIds.value.has(id)
 
 const retry = async (logId: number) => {
   if (retryLoading.value) return
@@ -336,19 +345,33 @@ onBeforeUnmount(() => {
     <section v-if="!statsLoading && recentErrors.length > 0" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
       <h2 class="text-xl font-bold text-slate-900 mb-4">Últimos Errores</h2>
       <div class="space-y-3">
-        <div v-for="error in recentErrors" :key="error.id" class="flex items-start justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:shadow-md transition cursor-pointer" @click="openDetail(error)">
-          <div class="flex-1">
-            <div class="flex items-center gap-3">
-              <span class="inline-block px-2.5 py-1.5 bg-red-200 text-red-800 text-xs font-bold rounded">{{ error.error_code }}</span>
-              <span class="text-slate-900 font-semibold">Cotización #{{ error.cotizacion?.codigo }}</span>
+        <div v-for="error in recentErrors" :key="error.id" class="overflow-hidden rounded-lg border border-red-200 bg-red-50">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-4 p-4 text-left hover:bg-red-100/60 transition"
+            @click="toggleRecentError(error.id)"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="inline-block px-2.5 py-1.5 bg-red-200 text-red-800 text-xs font-bold rounded">{{ error.error_code }}</span>
+                <span class="text-slate-900 font-semibold">Cotización #{{ error.cotizacion?.codigo }}</span>
+                <span class="text-slate-500 text-xs">{{ formatDate(error.created_at) }}</span>
+              </div>
+              <p class="mt-2 truncate text-sm text-slate-700">{{ error.error_message }}</p>
             </div>
-            <p class="text-slate-700 text-sm mt-2">{{ error.error_message }}</p>
-            <p class="text-slate-500 text-xs mt-2">{{ formatDate(error.created_at) }}</p>
-          </div>
-          <div class="ml-4">
-            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-            </svg>
+            <span class="shrink-0 text-red-700 font-semibold">{{ isRecentErrorOpen(error.id) ? 'Ocultar' : 'Ver' }}</span>
+          </button>
+          <div v-if="isRecentErrorOpen(error.id)" class="border-t border-red-200 bg-white p-4">
+            <p class="whitespace-pre-wrap break-words text-sm text-slate-800">{{ error.error_message }}</p>
+            <div class="mt-4 flex justify-end">
+              <button
+                type="button"
+                class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                @click="openDetail(error)"
+              >
+                Ver detalles completos
+              </button>
+            </div>
           </div>
         </div>
       </div>

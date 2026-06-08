@@ -69,6 +69,11 @@ const maintenancePipelines = [
     description: 'Inserta únicamente los pacientes que existen en Informix y aún no están en la base local. No modifica registros existentes.',
   },
   {
+    key: 'pacientes_existentes_informix',
+    title: 'Actualizar pacientes existentes desde Informix',
+    description: 'Actualiza nombres, apellidos, tipo de identificación, correo y teléfono de pacientes locales que ya existan por número de identificación. No inserta pacientes nuevos.',
+  },
+  {
     key: 'entidades_update_or_create',
     title: 'Actualizar o crear entidades',
     description: 'Sincroniza las entidades desde Informix, actualizando o creando según corresponda en la base local.',
@@ -87,6 +92,9 @@ const filterStatus   = ref('')
 const filterPipeline = ref('')
 const filterDateFrom = ref('')
 const filterDateTo   = ref('')
+const ocultarResultadoEstado = ref(false)
+const ocultarResultadoPasos = ref(false)
+const historyOpenIds = ref<Set<number>>(new Set())
 
 const activeFilters = computed(() => ({
   status:    filterStatus.value   || undefined,
@@ -127,7 +135,25 @@ const formatDuration = (seconds: number | null) => {
 // ── Acciones ───────────────────────────────────────────────
 const updateState = async () => {
   await Promise.all([fetchStatus(), fetchHistory({ ...activeFilters.value })])
+  ocultarResultadoEstado.value = false
+  ocultarResultadoPasos.value = false
 }
+
+const limpiarResultadoEstado = () => {
+  ocultarResultadoEstado.value = true
+}
+
+const limpiarResultadoPasos = () => {
+  ocultarResultadoPasos.value = true
+}
+
+const toggleHistory = (id: number) => {
+  const next = new Set(historyOpenIds.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  historyOpenIds.value = next
+}
+
+const isHistoryOpen = (id: number) => historyOpenIds.value.has(id)
 
 const ejecutar = async (pipeline: typeof pipelines[number]['key']) => {
   const response = await runPipeline(pipeline)
@@ -138,6 +164,8 @@ const ejecutar = async (pipeline: typeof pipelines[number]['key']) => {
   }
 
   push.success({ title: 'Sincronización', message: 'La sincronización inició correctamente.' })
+  ocultarResultadoEstado.value = false
+  ocultarResultadoPasos.value = false
   await updateState()
 }
 
@@ -178,14 +206,23 @@ onMounted(async () => {
     <div class="bg-white border border-slate-200 rounded-2xl p-6">
       <div class="flex items-start justify-between gap-4">
         <h2 class="text-lg font-semibold text-slate-900">Estado actual</h2>
-        <button
-          v-if="status.running"
-          class="h-9 px-4 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          :disabled="runningAction"
-          @click="abortar"
-        >
-          Forzar detención
-        </button>
+        <div class="flex flex-wrap justify-end gap-2">
+          <button
+            class="h-9 px-4 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="loading || (!status.message && !status.last_error) || ocultarResultadoEstado"
+            @click="limpiarResultadoEstado"
+          >
+            Borrar resultado
+          </button>
+          <button
+            v-if="status.running"
+            class="h-9 px-4 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="runningAction"
+            @click="abortar"
+          >
+            Forzar detención
+          </button>
+        </div>
       </div>
       <div v-if="loading" class="text-slate-500 mt-3">Consultando estado...</div>
       <div v-else class="mt-3 space-y-2 text-sm text-slate-700">
@@ -203,7 +240,10 @@ onMounted(async () => {
         <p><span class="font-semibold">Fin:</span> {{ formatDate(status.finished_at) }}</p>
         <p><span class="font-semibold">Paso actual:</span> {{ status.progress.current_step || '-' }}</p>
         <p><span class="font-semibold">Avance:</span> {{ status.progress.percent }}%</p>
-        <p v-if="status.last_error" class="text-red-600"><span class="font-semibold">Error:</span> {{ status.last_error }}</p>
+        <div v-if="!ocultarResultadoEstado && (status.message || status.last_error)" class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p v-if="status.message" class="text-slate-700"><span class="font-semibold">Resultado:</span> {{ status.message }}</p>
+          <p v-if="status.last_error" class="text-red-600 mt-1"><span class="font-semibold">Error:</span> {{ status.last_error }}</p>
+        </div>
       </div>
     </div>
 
@@ -257,17 +297,26 @@ onMounted(async () => {
 
     <!-- Detalle de pasos -->
     <div class="bg-white border border-slate-200 rounded-2xl p-6">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center justify-between gap-3 mb-3">
         <h2 class="text-lg font-semibold text-slate-900">Detalle de pasos</h2>
-        <button class="h-9 px-3 rounded-lg border border-slate-300 text-slate-700" @click="updateState">
-          Actualizar estado
-        </button>
+        <div class="flex flex-wrap justify-end gap-2">
+          <button class="h-9 px-3 rounded-lg border border-slate-300 text-slate-700" @click="updateState">
+            Actualizar estado
+          </button>
+          <button
+            class="h-9 px-3 rounded-lg border border-slate-300 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="ocultarResultadoPasos || !status.steps.some(step => step.output)"
+            @click="limpiarResultadoPasos"
+          >
+            Borrar resultado
+          </button>
+        </div>
       </div>
       <p v-if="status.steps.length === 0" class="text-sm text-slate-500">Aún no se ha ejecutado ningún proceso.</p>
       <ul v-else class="space-y-2 text-sm text-slate-700">
         <li v-for="step in status.steps" :key="step.key" class="bg-slate-50 rounded-lg p-3">
           <p class="font-semibold">{{ step.label }} - {{ step.status }}</p>
-          <p v-if="step.output" class="text-slate-600 mt-1 whitespace-pre-wrap">{{ step.output }}</p>
+          <p v-if="step.output && !ocultarResultadoPasos" class="text-slate-600 mt-1 whitespace-pre-wrap">{{ step.output }}</p>
         </li>
       </ul>
     </div>
@@ -308,6 +357,7 @@ onMounted(async () => {
             <option value="recursos_consultorios">Recursos a consultorios</option>
             <option value="pacientes_informix">Pacientes Informix (sync completa)</option>
             <option value="pacientes_nuevos_informix">Pacientes nuevos Informix</option>
+            <option value="pacientes_existentes_informix">Pacientes existentes Informix</option>
             <option value="codigos_laser_procedimientos">Códigos láser a procedimientos</option>
           </select>
         </div>
@@ -359,30 +409,56 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in history" :key="item.id" class="align-top">
-              <td class="border border-slate-200 p-2">{{ formatDate(item.started_at) }}</td>
-              <td class="border border-slate-200 p-2">{{ item.pipeline }}</td>
-              <td class="border border-slate-200 p-2">
-                <span
-                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
-                  :class="{
-                    'bg-amber-100 text-amber-800':  item.status === 'running',
-                    'bg-emerald-100 text-emerald-800': item.status === 'success',
-                    'bg-rose-100 text-rose-800':    item.status === 'failed',
-                    'bg-orange-100 text-orange-700': item.status === 'aborted',
-                    'bg-slate-100 text-slate-700':  !['running','success','failed','aborted'].includes(item.status),
-                  }"
-                >
-                  {{ item.status }}
-                </span>
-              </td>
-              <td class="border border-slate-200 p-2">{{ item.started_by?.name || '-' }}</td>
-              <td class="border border-slate-200 p-2">{{ formatDuration(item.duration_seconds) }}</td>
-              <td class="border border-slate-200 p-2">
-                <p class="text-slate-700">{{ item.message || '-' }}</p>
-                <p v-if="item.last_error" class="text-rose-600 mt-1">{{ item.last_error }}</p>
-              </td>
-            </tr>
+            <template v-for="item in history" :key="item.id">
+              <tr class="align-top cursor-pointer hover:bg-slate-50" @click="toggleHistory(item.id)">
+                <td class="border border-slate-200 p-2">
+                  <span class="mr-2 text-slate-500">{{ isHistoryOpen(item.id) ? '▼' : '▶' }}</span>
+                  {{ formatDate(item.started_at) }}
+                </td>
+                <td class="border border-slate-200 p-2">{{ item.pipeline }}</td>
+                <td class="border border-slate-200 p-2">
+                  <span
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
+                    :class="{
+                      'bg-amber-100 text-amber-800':  item.status === 'running',
+                      'bg-emerald-100 text-emerald-800': item.status === 'success',
+                      'bg-rose-100 text-rose-800':    item.status === 'failed',
+                      'bg-orange-100 text-orange-700': item.status === 'aborted',
+                      'bg-slate-100 text-slate-700':  !['running','success','failed','aborted'].includes(item.status),
+                    }"
+                  >
+                    {{ item.status }}
+                  </span>
+                </td>
+                <td class="border border-slate-200 p-2">{{ item.started_by?.name || '-' }}</td>
+                <td class="border border-slate-200 p-2">{{ formatDuration(item.duration_seconds) }}</td>
+                <td class="border border-slate-200 p-2 text-slate-600">
+                  {{ item.message || item.last_error || 'Ver detalle' }}
+                </td>
+              </tr>
+              <tr v-if="isHistoryOpen(item.id)" class="bg-slate-50">
+                <td colspan="6" class="border border-slate-200 p-4">
+                  <div class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                    <p><span class="font-semibold">Fecha fin:</span> {{ formatDate(item.finished_at) }}</p>
+                    <p><span class="font-semibold">Paso actual:</span> {{ item.progress.current_step || '-' }}</p>
+                    <p><span class="font-semibold">Avance:</span> {{ item.progress.percent }}%</p>
+                    <p><span class="font-semibold">Duración:</span> {{ formatDuration(item.duration_seconds) }}</p>
+                  </div>
+                  <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                    <p class="font-semibold text-slate-800">Resultado</p>
+                    <p class="mt-1 whitespace-pre-wrap text-slate-700">{{ item.message || '-' }}</p>
+                    <p v-if="item.last_error" class="mt-2 whitespace-pre-wrap text-rose-600">{{ item.last_error }}</p>
+                  </div>
+                  <div v-if="item.steps?.length" class="mt-3 space-y-2">
+                    <p class="font-semibold text-slate-800">Pasos ejecutados</p>
+                    <div v-for="step in item.steps" :key="`${item.id}-${step.key}`" class="rounded-lg border border-slate-200 bg-white p-3">
+                      <p class="font-semibold">{{ step.label }} - {{ step.status }}</p>
+                      <p v-if="step.output" class="mt-1 whitespace-pre-wrap text-slate-600">{{ step.output }}</p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
