@@ -1671,7 +1671,7 @@ const guardarCotizacion = async () => {
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
         cotizacion.value = { origen: '', tipo_gestion: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
-        codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '' };
+        codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '', diasVigencia: '' };
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;
 

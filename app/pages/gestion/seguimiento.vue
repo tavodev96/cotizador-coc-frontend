@@ -7,6 +7,21 @@ const router = useRouter()
 const route = useRoute()
 
 const cotizaciones = ref([])
+const filtrosTabla = ref({})
+const ordenTabla = ref({ key: '', direction: 'asc' })
+const columnas = [
+  { key: 'created_at', label: 'Fecha de creación', align: 'left' },
+  { key: 'codigo', label: 'Consecutivo', align: 'left' },
+  { key: 'paciente', label: 'Nombre del paciente', align: 'left' },
+  { key: 'identificacion', label: 'Identificación', align: 'left' },
+  { key: 'estado', label: 'Estado base', align: 'center' },
+  { key: 'medico', label: 'Médico', align: 'left' },
+  { key: 'estado_gestion', label: 'Estado de gestión', align: 'left' },
+  { key: 'dias', label: 'Días', align: 'center' },
+  { key: 'acciones', label: 'Acciones', align: 'center', filterable: false, sortable: false },
+]
+const columnasPorDefecto = ['created_at', 'codigo', 'paciente', 'identificacion', 'estado', 'medico', 'estado_gestion', 'dias', 'acciones']
+const columnasVisibles = ref([...columnasPorDefecto])
 const buscadorRef = ref(null)
 const resetBuscador = ref(false)
 const busquedaRealizada = ref(false)
@@ -22,6 +37,7 @@ const hayFiltrosDashboard = computed(() => {
   return Boolean(
     route.query.asesor_id ||
     route.query.estado_id ||
+    route.query.estado_gestion_id ||
     route.query.vigencia_estado ||
     route.query.codigo ||
     route.query.documento ||
@@ -45,6 +61,8 @@ const formatoFecha = (fechaISO) => {
 
 const actualizarResultados = (resultados) => {
   cotizaciones.value = resultados
+  filtrosTabla.value = {}
+  ordenTabla.value = { key: '', direction: 'asc' }
   busquedaRealizada.value = true
 }
 
@@ -84,6 +102,99 @@ const claseVigencia = (vigencia) => {
   return 'bg-slate-100 text-slate-700'
 }
 
+const valorColumna = (cotizacion, key) => {
+  const valores = {
+    created_at: fechaCorta(cotizacion?.created_at),
+    codigo: cotizacion?.codigo || '',
+    paciente: nombrePaciente(cotizacion),
+    identificacion: cotizacion?.paciente?.numero_identificacion || 'N/A',
+    estado: cotizacion?.estado?.nombre || 'Sin estado',
+    medico: cotizacion?.medico?.nombre || 'N/A',
+    estado_gestion: cotizacion?.estado_gestion?.nombre || 'Sin gestión',
+    dias: diasObservacion(cotizacion),
+  }
+
+  return valores[key] ?? ''
+}
+
+const normalizarTexto = (valor) => String(valor ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
+
+const columnasTabla = computed(() => columnas.filter((columna) => columnasVisibles.value.includes(columna.key)))
+
+const cotizacionesFiltradas = computed(() => {
+  const filtradas = cotizaciones.value.filter((cotizacion) => {
+    return columnas.every((columna) => {
+      if (columna.filterable === false) return true
+      const filtro = normalizarTexto(filtrosTabla.value[columna.key])
+      if (!filtro) return true
+      return normalizarTexto(valorColumna(cotizacion, columna.key)).includes(filtro)
+    })
+  })
+
+  if (!ordenTabla.value.key) return filtradas
+
+  const direccion = ordenTabla.value.direction === 'desc' ? -1 : 1
+  const key = ordenTabla.value.key
+
+  return [...filtradas].sort((a, b) => {
+    const valorA = valorColumna(a, key)
+    const valorB = valorColumna(b, key)
+    const numeroA = Number(String(valorA).replace(/[^\d.-]/g, ''))
+    const numeroB = Number(String(valorB).replace(/[^\d.-]/g, ''))
+
+    if (!Number.isNaN(numeroA) && !Number.isNaN(numeroB) && String(valorA).match(/\d/) && String(valorB).match(/\d/)) {
+      return (numeroA - numeroB) * direccion
+    }
+
+    return String(valorA).localeCompare(String(valorB), 'es', { numeric: true, sensitivity: 'base' }) * direccion
+  })
+})
+
+const alternarOrden = (key) => {
+  if (ordenTabla.value.key === key) {
+    ordenTabla.value.direction = ordenTabla.value.direction === 'asc' ? 'desc' : 'asc'
+    return
+  }
+
+  ordenTabla.value = { key, direction: 'asc' }
+}
+
+const storageKeyColumnas = 'seguimiento-columnas-visibles'
+
+const cargarColumnas = () => {
+  if (import.meta.server) return
+  const raw = localStorage.getItem(storageKeyColumnas)
+  if (!raw) return
+
+  try {
+    const parsed = JSON.parse(raw)
+    const validas = Array.isArray(parsed) ? parsed.filter((key) => columnas.some((columna) => columna.key === key)) : []
+    if (validas.length) columnasVisibles.value = validas
+  } catch (error) {
+    console.error('No fue posible leer columnas de seguimiento:', error)
+  }
+}
+
+watch(columnasVisibles, (actual) => {
+  if (!actual.length) {
+    columnasVisibles.value = [...columnasPorDefecto]
+    return
+  }
+
+  if (!actual.includes('acciones')) {
+    columnasVisibles.value = [...actual, 'acciones']
+    return
+  }
+
+  if (!import.meta.server) {
+    localStorage.setItem(storageKeyColumnas, JSON.stringify(actual))
+  }
+}, { deep: true })
+
 const claseDiasObservacion = (cotizacion) => {
   if (cotizacion?.vigencia?.estado === 'vencida') {
     return 'bg-rose-600 text-white'
@@ -112,11 +223,17 @@ const fechaCorta = (fechaISO) => {
 
 const borrarFiltros = () => {
   cotizaciones.value = []
+  filtrosTabla.value = {}
+  ordenTabla.value = { key: '', direction: 'asc' }
   resetBuscador.value = !resetBuscador.value
   busquedaRealizada.value = false
   actualizarPagination({ current_page: 1, last_page: 1, per_page: 10, total: 0 })
   router.replace({ path: route.path, query: {} })
 };
+
+onMounted(() => {
+  cargarColumnas()
+})
 </script>
 
 <template>
@@ -134,17 +251,37 @@ const borrarFiltros = () => {
 
     <div class="flex items-center justify-between gap-3">
       <div class="text-sm text-slate-600">
-        <span v-if="busquedaRealizada">{{ cotizaciones.length }} resultado{{ cotizaciones.length === 1 ? '' : 's' }}</span>
+        <span v-if="busquedaRealizada">{{ cotizacionesFiltradas.length }} resultado{{ cotizacionesFiltradas.length === 1 ? '' : 's' }} visible{{ cotizacionesFiltradas.length === 1 ? '' : 's' }}</span>
         <span v-else>Aplica filtros para consultar cotizaciones</span>
       </div>
 
-      <button
-        v-if="cotizaciones.length > 0 || busquedaRealizada"
-        @click="borrarFiltros"
-        class="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
-      >
-        Borrar filtros
-      </button>
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <details v-if="cotizaciones.length > 0" class="relative">
+          <summary class="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center text-sm font-medium">
+            Columnas visibles ({{ columnasVisibles.length }})
+          </summary>
+          <div class="absolute right-0 z-20 mt-2 w-72 max-h-80 overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+            <label v-for="col in columnas" :key="col.key" class="flex items-center gap-2 py-1 text-sm text-slate-700">
+              <input
+                v-model="columnasVisibles"
+                type="checkbox"
+                :value="col.key"
+                :disabled="col.key === 'acciones'"
+                class="rounded border-slate-300"
+              />
+              <span>{{ col.label }}</span>
+            </label>
+          </div>
+        </details>
+
+        <button
+          v-if="cotizaciones.length > 0 || busquedaRealizada"
+          @click="borrarFiltros"
+          class="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+        >
+          Borrar filtros
+        </button>
+      </div>
     </div>
 
     <div v-if="cotizaciones.length" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -154,7 +291,7 @@ const borrarFiltros = () => {
           <p class="text-xs text-slate-500">Revisa, imprime o edita cada cotización desde la misma tabla.</p>
         </div>
         <span class="w-fit rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
-          {{ pagination.total }} registro{{ pagination.total === 1 ? '' : 's' }}
+          {{ cotizacionesFiltradas.length }} de {{ pagination.total }} registro{{ pagination.total === 1 ? '' : 's' }}
         </span>
       </div>
 
@@ -162,31 +299,50 @@ const borrarFiltros = () => {
       <table class="min-w-[1180px] w-full text-sm border-collapse">
         <thead class="bg-[#172a83] text-white">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Fecha de<br>creación</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Consecutivo</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Nombre del<br>paciente</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Identificación</th>
-            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Estado<br>base</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Médico</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Estado de<br>gestión</th>
-            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Días</th>
-            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide">Acciones</th>
+            <th
+              v-for="col in columnasTabla"
+              :key="col.key"
+              class="px-4 py-3 text-xs font-bold uppercase tracking-wide"
+              :class="col.align === 'center' ? 'text-center' : 'text-left'"
+            >
+              <button
+                v-if="col.sortable !== false"
+                type="button"
+                class="inline-flex items-center gap-1 uppercase"
+                @click="alternarOrden(col.key)"
+              >
+                {{ col.label }}
+                <span class="text-[10px]">{{ ordenTabla.key === col.key ? (ordenTabla.direction === 'asc' ? '▲' : '▼') : '↕' }}</span>
+              </button>
+              <span v-else>{{ col.label }}</span>
+            </th>
+          </tr>
+          <tr class="bg-indigo-950/90">
+            <th v-for="col in columnasTabla" :key="`filter-${col.key}`" class="px-3 py-2">
+              <input
+                v-if="col.filterable !== false"
+                v-model="filtrosTabla[col.key]"
+                type="text"
+                :placeholder="`Filtrar ${col.label}`"
+                class="w-full rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs font-normal text-slate-800 placeholder:text-slate-400"
+              />
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          <tr v-for="c in cotizaciones" :key="c.id" class="hover:bg-indigo-50/40 transition-colors">
-            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ fechaCorta(c.created_at) }}</td>
-            <td class="px-4 py-3 whitespace-nowrap font-bold text-slate-950">{{ c.codigo }}</td>
-            <td class="px-4 py-3 font-semibold text-slate-950">{{ nombrePaciente(c) }}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.paciente?.numero_identificacion || 'N/A' }}</td>
-            <td class="px-4 py-3 text-center">
+          <tr v-for="c in cotizacionesFiltradas" :key="c.id" class="hover:bg-indigo-50/40 transition-colors">
+            <td v-if="columnasVisibles.includes('created_at')" class="px-4 py-3 whitespace-nowrap text-slate-700">{{ fechaCorta(c.created_at) }}</td>
+            <td v-if="columnasVisibles.includes('codigo')" class="px-4 py-3 whitespace-nowrap font-bold text-slate-950">{{ c.codigo }}</td>
+            <td v-if="columnasVisibles.includes('paciente')" class="px-4 py-3 font-semibold text-slate-950">{{ nombrePaciente(c) }}</td>
+            <td v-if="columnasVisibles.includes('identificacion')" class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.paciente?.numero_identificacion || 'N/A' }}</td>
+            <td v-if="columnasVisibles.includes('estado')" class="px-4 py-3 text-center">
               <span class="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase text-indigo-700 ring-1 ring-indigo-200">
                 {{ c.estado?.nombre || 'Sin estado' }}
               </span>
             </td>
-            <td class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.medico?.nombre || 'N/A' }}</td>
-            <td class="px-4 py-3 text-slate-700">{{ c.estado_gestion?.nombre || 'Sin gestión' }}</td>
-            <td class="px-4 py-3 text-center">
+            <td v-if="columnasVisibles.includes('medico')" class="px-4 py-3 whitespace-nowrap text-slate-700">{{ c.medico?.nombre || 'N/A' }}</td>
+            <td v-if="columnasVisibles.includes('estado_gestion')" class="px-4 py-3 text-slate-700">{{ c.estado_gestion?.nombre || 'Sin gestión' }}</td>
+            <td v-if="columnasVisibles.includes('dias')" class="px-4 py-3 text-center">
               <span
                 v-if="c.vigencia?.mostrar !== false"
                 class="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-xs font-bold ring-2 ring-white shadow-sm"
@@ -197,7 +353,7 @@ const borrarFiltros = () => {
               </span>
               <span v-else>-</span>
             </td>
-            <td class="px-4 py-3">
+            <td v-if="columnasVisibles.includes('acciones')" class="px-4 py-3">
               <div class="flex items-center justify-end gap-2 whitespace-nowrap">
                 <NuxtLink :to="`/cotizacion/${c.id}`" title="Ver detalle" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-white hover:border-indigo-300">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5c5.5 0 9 5.3 9 7s-3.5 7-9 7s-9-5.3-9-7s3.5-7 9-7m0 2c-4 0-6.8 3.8-7 5c.2 1.2 3 5 7 5s6.8-3.8 7-5c-.2-1.2-3-5-7-5m0 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5"/></svg>
@@ -213,6 +369,9 @@ const borrarFiltros = () => {
           </tr>
         </tbody>
       </table>
+      <div v-if="!cotizacionesFiltradas.length" class="px-4 py-8 text-center text-sm text-slate-600">
+        No hay registros que coincidan con los filtros de la tabla.
+      </div>
       </div>
 
       <div class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
