@@ -50,6 +50,25 @@ const normalizarFechaInput = (value) => {
   return String(value).slice(0, 10)
 }
 
+const fechaHoyInput = () => {
+  const hoy = new Date()
+  const yyyy = hoy.getFullYear()
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0')
+  const dd = String(hoy.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const horaActualInput = () => {
+  const ahora = new Date()
+  ahora.setMinutes(ahora.getMinutes() + 1)
+  return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+}
+
+const horaProgramadaParaFecha = (fecha) => {
+  if (!fecha) return null
+  return fecha === fechaHoyInput() ? horaActualInput() : '00:00'
+}
+
 const fetchDetalle = async () => {
   try {
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}`)
@@ -261,7 +280,7 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
       estado: estadoId,
       comentario_cambio_estado: options.comentario || null,
       fecha_programada: Number(estadoId) === 5 ? (options.fechaProgramada || null) : null,
-      hora_programada: Number(estadoId) === 5 ? (options.horaProgramada || '00:00') : null,
+      hora_programada: Number(estadoId) === 5 ? (options.horaProgramada || horaProgramadaParaFecha(options.fechaProgramada)) : null,
     }
 
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
@@ -560,7 +579,7 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
         <h2 class="text-2xl font-semibold text-slate-900"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
           cotizacion?.codigo }}</h2>
         <p class="text-slate-700"><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
-        <p class="text-slate-700"><span class="font-bold">Entidad:</span> {{ cotizacion?.paciente?.entidad?.nombre || 'N/A' }}</p>
+        <p class="text-slate-700"><span class="font-bold">Entidad:</span> {{ cotizacion?.entidad?.nombre || cotizacion?.paciente?.entidad?.nombre || 'N/A' }}</p>
         <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
         <p class="text-slate-700"><span class="font-bold">Salesforce:</span>
           <span :class="{

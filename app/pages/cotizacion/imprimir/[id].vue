@@ -26,6 +26,7 @@ const activarPacienteDesdeCodificacion = computed(() => route.query.paciente ===
 
 const esCodificacion = computed(() => cotizacion.value?.tipo_gestion === 'codificación')
 const esCotizacion = computed(() => cotizacion.value?.tipo_gestion === 'cotización')
+const tipoDocumentoLabel = computed(() => esCodificacion.value ? 'Codificación' : 'Cotización')
 const modoPaciente = computed(() => imprimirParaPaciente.value || imprimirParaPacienteDetallada.value || modoConsulta.value)
 const modoPacienteResumen = computed(() => imprimirParaPaciente.value && !imprimirParaPacienteDetallada.value)
 const modoPacienteDetallado = computed(() => !modoConsulta.value && imprimirParaPacienteDetallada.value)
@@ -478,6 +479,44 @@ const createCanvasSlice = (canvas, sourceY, sourceHeight) => {
   return slice
 }
 
+const rowHasContent = (context, width, y) => {
+  const step = 10
+  const pixels = context.getImageData(0, y, width, 1).data
+  let visiblePixels = 0
+
+  for (let x = 0; x < width; x += step) {
+    const alpha = pixels[(x * 4) + 3]
+    if (alpha > 8) visiblePixels += 1
+  }
+
+  return visiblePixels > 2
+}
+
+const findSafeSliceHeight = (canvas, sourceY, preferredHeight) => {
+  const remaining = canvas.height - sourceY
+  if (remaining <= preferredHeight) return remaining
+
+  const context = canvas.getContext('2d')
+  const minHeight = Math.floor(preferredHeight * 0.72)
+  const scanLimit = Math.min(260, Math.floor(preferredHeight * 0.22))
+
+  for (let offset = 0; offset < scanLimit; offset += 4) {
+    const candidateHeight = preferredHeight - offset
+    if (candidateHeight < minHeight) break
+
+    const y = sourceY + candidateHeight
+    const hasNearbyContent = rowHasContent(context, canvas.width, y)
+      || rowHasContent(context, canvas.width, Math.max(sourceY, y - 4))
+      || rowHasContent(context, canvas.width, Math.min(canvas.height - 1, y + 4))
+
+    if (!hasNearbyContent) {
+      return candidateHeight
+    }
+  }
+
+  return preferredHeight
+}
+
 const buildPdfOnTemplate = async (html2canvas) => {
   const canvas = await renderContentCanvas(html2canvas)
   const templateResponse = await fetch('/report-template.pdf')
@@ -503,7 +542,7 @@ const buildPdfOnTemplate = async (html2canvas) => {
   let sourceY = 0
 
   while (sourceY < canvas.height) {
-    const currentSliceHeight = Math.min(sliceHeightPx, canvas.height - sourceY)
+    const currentSliceHeight = findSafeSliceHeight(canvas, sourceY, sliceHeightPx)
     const pageSlice = createCanvasSlice(canvas, sourceY, currentSliceHeight)
     const pageImage = await pdfDoc.embedPng(pageSlice.toDataURL('image/png'))
     const drawHeight = (currentSliceHeight * drawWidth) / canvas.width
@@ -725,7 +764,7 @@ const enviarCorreo = async () => {
         </div>
         <div class="quote-patient-col">
           <div class="quote-info-row">
-            <strong>Cotización:</strong>
+            <strong>{{ tipoDocumentoLabel }}:</strong>
             <span>{{ cotizacion?.codigo || 'N/A' }}</span>
           </div>
           <div class="quote-info-row">
@@ -752,107 +791,71 @@ const enviarCorreo = async () => {
       </section>
       <hr class="quote-divider" />
       <template v-if="esCodificacion && modoPaciente">
-        <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">PROCEDIMIENTO</h2>
-        <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
-          <thead class="bg-[#1570b1] text-white">
-            <tr>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">CUPS</th>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-              <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, idx) in procedimientosPaciente" :key="`paciente-codif-${idx}`">
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.codigo }}</td>
-              <td class="border px-2 py-1" style="padding: 4px;">{{ item.nombre }}</td>
-              <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ item.lateralidad }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <h2 class="quote-section-title">PROCEDIMIENTO</h2>
+        <div class="quote-grid" style="grid-template-columns: 92px minmax(0, 1fr) 116px;">
+          <div class="quote-grid-head">CUPS</div>
+          <div class="quote-grid-head">Nombre</div>
+          <div class="quote-grid-head">Lateralidad</div>
+          <template v-for="(item, idx) in procedimientosPaciente" :key="`paciente-codif-${idx}`">
+            <div class="quote-grid-cell">{{ item.codigo }}</div>
+            <div class="quote-grid-cell">{{ item.nombre }}</div>
+            <div class="quote-grid-cell capitalize">{{ item.lateralidad }}</div>
+          </template>
+        </div>
 
         <template v-if="detallesDesglosados.insumos.length > 0">
-          <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
-          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
-            <thead class="bg-[#1570b1] text-white">
-              <tr>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(detalle, idx) in detallesDesglosados.insumos" :key="`paciente-insumo-${idx}`">
-                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ detalle.lateralidad || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <h2 class="quote-section-title">INSUMOS</h2>
+          <div class="quote-grid" style="grid-template-columns: 92px minmax(0, 1fr) 116px;">
+            <div class="quote-grid-head">Código</div>
+            <div class="quote-grid-head">Nombre</div>
+            <div class="quote-grid-head">Lateralidad</div>
+            <template v-for="(detalle, idx) in detallesDesglosados.insumos" :key="`paciente-insumo-${idx}`">
+              <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+              <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+              <div class="quote-grid-cell capitalize">{{ detalle.lateralidad || '-' }}</div>
+            </template>
+          </div>
         </template>
 
         <template v-if="detallesDesglosados.lentes.length > 0">
-          <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
-          <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; margin-bottom: 12px;">
-            <thead class="bg-[#1570b1] text-white">
-              <tr>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                <th class="border px-2 py-1" style="padding: 6px 4px;">Lateralidad</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(detalle, idx) in detallesDesglosados.lentes" :key="`paciente-lente-${idx}`">
-                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                <td class="border px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                <td class="border px-2 py-1 capitalize" style="padding: 4px;">{{ detalle.lateralidad || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <h2 class="quote-section-title">LENTES</h2>
+          <div class="quote-grid" style="grid-template-columns: 92px minmax(0, 1fr) 116px;">
+            <div class="quote-grid-head">Código</div>
+            <div class="quote-grid-head">Nombre</div>
+            <div class="quote-grid-head">Lateralidad</div>
+            <template v-for="(detalle, idx) in detallesDesglosados.lentes" :key="`paciente-lente-${idx}`">
+              <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+              <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+              <div class="quote-grid-cell capitalize">{{ detalle.lateralidad || '-' }}</div>
+            </template>
+          </div>
         </template>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; ">
           <div>
-            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">VALORES DE CODIFICACIÓN</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px;">
-              <tbody>
-                <tr>
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Copago</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(cotizacion?.codificacion?.copago)
-                    }}</td>
-                </tr>
-                <tr>
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Excedente tope</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(cotizacion?.codificacion?.excedente_tope) }}</td>
-                </tr>
-                <tr v-if="valorLentesCodificacion > 0">
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Lente</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(valorLentesCodificacion)
-                    }}</td>
-                </tr>
-                <tr v-if="auxilioLenteCodificacion > 0">
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Auxilio de lente</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{ formatMoney(auxilioLenteCodificacion)
-                    }}</td>
-                </tr>
-                <tr>
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Preanestesia</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</td>
-                </tr>
-                <tr>
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Otros</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(cotizacion?.codificacion?.otros_costos) }}</td>
-                </tr>
-                <tr v-if="Number(cotizacion?.codificacion?.insumos || 0) > 0">
-                  <td class="border px-2 py-1 font-semibold bg-gray-50" style="padding: 4px;">Insumos</td>
-                  <td class="border px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(cotizacion?.codificacion?.insumos) }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">VALORES DE CODIFICACIÓN</h2>
+            <div class="quote-grid cols-2 quote-values-grid" style="grid-template-columns: minmax(0, 1fr) 132px;">
+              <div class="quote-grid-cell quote-label-cell">Copago</div>
+              <div class="quote-grid-cell text-right">{{ formatMoney(cotizacion?.codificacion?.copago) }}</div>
+              <div class="quote-grid-cell quote-label-cell">Excedente tope</div>
+              <div class="quote-grid-cell text-right">{{ formatMoney(cotizacion?.codificacion?.excedente_tope) }}</div>
+              <template v-if="valorLentesCodificacion > 0">
+                <div class="quote-grid-cell quote-label-cell">Lente</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(valorLentesCodificacion) }}</div>
+              </template>
+              <template v-if="auxilioLenteCodificacion > 0">
+                <div class="quote-grid-cell quote-label-cell">Auxilio de lente</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(auxilioLenteCodificacion) }}</div>
+              </template>
+              <div class="quote-grid-cell quote-label-cell">Preanestesia</div>
+              <div class="quote-grid-cell text-right">{{ formatMoney(cotizacion?.codificacion?.pre_anestesia) }}</div>
+              <div class="quote-grid-cell quote-label-cell">Otros</div>
+              <div class="quote-grid-cell text-right">{{ formatMoney(cotizacion?.codificacion?.otros_costos) }}</div>
+              <template v-if="Number(cotizacion?.codificacion?.insumos || 0) > 0">
+                <div class="quote-grid-cell quote-label-cell">Insumos</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(cotizacion?.codificacion?.insumos) }}</div>
+              </template>
+            </div>
           </div>
 
           <div>
@@ -899,103 +902,63 @@ const enviarCorreo = async () => {
           v-if="modoPacienteResumen && !modoConsulta && (detallesAgrupados.insumos.length > 0 || detallesAgrupados.lentes.length > 0)">
           <!-- Insumos (agregados con valores) -->
           <template v-if="detallesAgrupados.insumos.length > 0">
-            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad Total</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Insumos</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{
-                    totalCantidadInsumos }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
-                    {{ formatMoney(totalInsumos) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">INSUMOS</h2>
+            <div class="quote-grid" style="grid-template-columns: minmax(0, 1fr) 120px 132px;">
+              <div class="quote-grid-head">Descripción</div>
+              <div class="quote-grid-head text-center">Cantidad Total</div>
+              <div class="quote-grid-head text-right">Valor Total</div>
+              <div class="quote-grid-cell font-semibold">Insumos</div>
+              <div class="quote-grid-cell text-center font-semibold">{{ totalCantidadInsumos }}</div>
+              <div class="quote-grid-cell text-right font-semibold">{{ formatMoney(totalInsumos) }}</div>
+            </div>
           </template>
 
           <!-- Lentes (agregados con valores) -->
           <template v-if="detallesAgrupados.lentes.length > 0">
-            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Descripción</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad Total</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="border border-gray-400 px-2 py-1 font-semibold" style="padding: 4px;">Lentes</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center font-semibold" style="padding: 4px;">{{
-                    totalCantidadLentes }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-right font-semibold" style="padding: 4px;">
-                    {{ formatMoney(totalLentes) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">LENTES</h2>
+            <div class="quote-grid" style="grid-template-columns: minmax(0, 1fr) 120px 132px;">
+              <div class="quote-grid-head">Descripción</div>
+              <div class="quote-grid-head text-center">Cantidad Total</div>
+              <div class="quote-grid-head text-right">Valor Total</div>
+              <div class="quote-grid-cell font-semibold">Lentes</div>
+              <div class="quote-grid-cell text-center font-semibold">{{ totalCantidadLentes }}</div>
+              <div class="quote-grid-cell text-right font-semibold">{{ formatMoney(totalLentes) }}</div>
+            </div>
           </template>
         </div>
 
         <div
           v-if="(modoPacienteDetallado || modoConsulta) && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
-            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">INSUMOS</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="detalle in detallesDesglosados.insumos"
-                  :key="`pac-det-ins-${detalle.id || detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}
-                  </td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(detalle.valor_total) }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">INSUMOS</h2>
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 68px 116px;">
+              <div class="quote-grid-head">Código</div>
+              <div class="quote-grid-head">Nombre</div>
+              <div class="quote-grid-head text-center">Cantidad</div>
+              <div class="quote-grid-head text-right">Valor</div>
+              <template v-for="detalle in detallesDesglosados.insumos" :key="`pac-det-ins-${detalle.id || detalle.codigo}-${detalle.nombre}`">
+                <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+                <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+                <div class="quote-grid-cell text-center">{{ detalle.cantidad }}</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(detalle.valor_total) }}</div>
+              </template>
+            </div>
           </template>
 
           <template v-if="detallesDesglosados.lentes.length > 0">
-            <h2 style="font-size: 13px; font-weight: bold; margin: 6px 0 4px 0;">LENTES</h2>
-            <table class="w-full border-collapse border border-gray-400" style="font-size: 11px; ">
-              <thead class="bg-[#1570b1] text-white">
-                <tr>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Código</th>
-                  <th class="border px-2 py-1" style="padding: 6px 4px;">Nombre</th>
-                  <th class="border px-2 py-1 text-center" style="padding: 6px 4px;">Cantidad</th>
-                  <th class="border px-2 py-1 text-right" style="padding: 6px 4px;">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="detalle in detallesDesglosados.lentes"
-                  :key="`pac-det-len-${detalle.id || detalle.codigo}-${detalle.nombre}`">
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.codigo }}</td>
-                  <td class="border border-gray-400 px-2 py-1" style="padding: 4px;">{{ detalle.nombre }}</td>
-                  <td class="border border-gray-400 px-2 py-1 text-center" style="padding: 4px;">{{ detalle.cantidad }}
-                  </td>
-                  <td class="border border-gray-400 px-2 py-1 text-right" style="padding: 4px;">{{
-                    formatMoney(detalle.valor_total) }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <h2 class="quote-section-title">LENTES</h2>
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 68px 116px;">
+              <div class="quote-grid-head">Código</div>
+              <div class="quote-grid-head">Nombre</div>
+              <div class="quote-grid-head text-center">Cantidad</div>
+              <div class="quote-grid-head text-right">Valor</div>
+              <template v-for="detalle in detallesDesglosados.lentes" :key="`pac-det-len-${detalle.id || detalle.codigo}-${detalle.nombre}`">
+                <div class="quote-grid-cell">{{ detalle.codigo }}</div>
+                <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+                <div class="quote-grid-cell text-center">{{ detalle.cantidad }}</div>
+                <div class="quote-grid-cell text-right">{{ formatMoney(detalle.valor_total) }}</div>
+              </template>
+            </div>
           </template>
         </div>
 
@@ -1004,7 +967,7 @@ const enviarCorreo = async () => {
           v-if="!modoPaciente && !modoConsulta && (detallesDesglosados.insumos.length > 0 || detallesDesglosados.lentes.length > 0)">
           <template v-if="detallesDesglosados.insumos.length > 0">
             <h2 class="quote-section-title">INSUMOS</h2>
-            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 86px 116px;">
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 68px 116px;">
               <div class="quote-grid-head">Código</div>
               <div class="quote-grid-head">Nombre</div>
               <div class="quote-grid-head text-center">Cantidad</div>
@@ -1020,7 +983,7 @@ const enviarCorreo = async () => {
 
           <template v-if="detallesDesglosados.lentes.length > 0">
             <h2 class="quote-section-title">LENTES</h2>
-            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 86px 116px;">
+            <div class="quote-grid cols-4" style="grid-template-columns: 86px minmax(0, 1fr) 68px 116px;">
               <div class="quote-grid-head">Código</div>
               <div class="quote-grid-head">Nombre</div>
               <div class="quote-grid-head text-center">Cantidad</div>
@@ -1217,24 +1180,6 @@ const enviarCorreo = async () => {
 <style>
 
 
-.quote-print-document table td,
-.quote-print-document table th {
-  vertical-align: middle !important;
-  padding: 3px 8px !important;
-  line-height: 1.05;
-}
-
-
-/* .quote-print-document table td {
-  display: table-cell;
-} */
-
-
-.quote-print-document table th,
-.quote-print-document table td {
-  min-height: 22px;
-}
-
 .quote-patient-data {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1319,16 +1264,16 @@ const enviarCorreo = async () => {
 .quote-grid {
   display: grid;
   width: 100%;
-  overflow: hidden;
+  min-width: 0;
   border: 1px solid #9ca3af;
   border-radius: 2px;
   font-size: 12px;
   margin-bottom: 8px;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  box-sizing: border-box;
 }
 
 .quote-grid-cell {
+  min-width: 0;
   min-height: 26px;
   display: grid;
   place-items: center start;
@@ -1338,6 +1283,8 @@ const enviarCorreo = async () => {
   border-bottom: 1px solid #cbd5e1;
   line-height: 1.08;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
   box-sizing: border-box;
 }
 
@@ -1348,6 +1295,7 @@ const enviarCorreo = async () => {
 }
 
 .quote-grid-head {
+  min-width: 0;
   min-height: 26px;
   display: grid;
   place-items: center;
@@ -1359,7 +1307,22 @@ const enviarCorreo = async () => {
   color: #fff;
   font-weight: 700;
   line-height: 1.05;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   box-sizing: border-box;
+}
+
+.quote-label-cell {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.quote-values-grid .quote-grid-cell {
+  min-height: 24px;
+}
+
+.quote-grid .font-semibold {
+  font-weight: 700;
 }
 
 .quote-grid-cell:nth-child(3n),

@@ -21,7 +21,8 @@ const filtros = ref({
     medico_id: '',
     entidad_id: '',
     asesor_id: '',
-    estado_id: ''
+    estado_id: '',
+    estado_gestion_id: ''
 })
 
 const registros = ref([])
@@ -137,6 +138,7 @@ const applyRouteFilters = () => {
     filtros.value.entidad_id = maybeString(query.entidad_id)
     filtros.value.asesor_id = maybeString(query.asesor_id)
     filtros.value.estado_id = maybeString(query.estado_id)
+    filtros.value.estado_gestion_id = maybeString(query.estado_gestion_id)
 
     if (filtros.value.estado_id === '4') {
         filtros.value.estado_id = '6'
@@ -164,6 +166,7 @@ const hasRouteFilters = () => {
         'entidad_id',
         'asesor_id',
         'estado_id',
+        'estado_gestion_id',
     ].some(key => Boolean(route.query[key]))
 }
 
@@ -270,6 +273,7 @@ const buscar = async (page = 1) => {
                 entidad_id: filtros.value.entidad_id,
                 asesor_id: filtros.value.asesor_id,
                 estado_id: filtros.value.estado_id,
+                estado_gestion_id: filtros.value.estado_gestion_id,
                 estado_ids: filtros.value.estado_id === '6' ? '4,6' : undefined,
                 page,
                 per_page: pagination.value.per_page,
@@ -306,6 +310,25 @@ defineExpose({
     buscar,
 })
 
+const buscarPendientesSinGestion = async () => {
+    filtros.value.codigo = ''
+    filtros.value.documento = ''
+    filtros.value.tipo_gestion = ''
+    filtros.value.vigencia_estado = ''
+    filtros.value.fecha_inicio = ''
+    filtros.value.fecha_fin = ''
+    filtros.value.medico_id = ''
+    filtros.value.entidad_id = ''
+    filtros.value.asesor_id = ''
+    filtros.value.estado_id = '1'
+    filtros.value.estado_gestion_id = 'sin_gestion'
+    buscadorMedico.value = ''
+    buscadorEntidad.value = ''
+    buscadorAsesor.value = ''
+    cerrarDropdowns()
+    await buscar(1)
+}
+
 onMounted(() => {
     cargarCatalogos().then(async () => {
         applyRouteFilters()
@@ -331,6 +354,7 @@ watch(() => props.reset, () => {
     filtros.value.entidad_id = ''
     filtros.value.asesor_id = ''
     filtros.value.estado_id = ''
+    filtros.value.estado_gestion_id = ''
     buscadorMedico.value = ''
     buscadorEntidad.value = ''
     buscadorAsesor.value = ''
@@ -448,7 +472,10 @@ watch(() => route.query, async () => {
         </select>
         </div>
 
-        <div class="flex justify-end">
+        <div class="flex flex-wrap justify-end gap-2">
+            <button @click="buscarPendientesSinGestion" class="inline-flex items-center justify-center h-11 px-4 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
+                Pendientes sin gestión
+            </button>
             <button @click="buscar" class="inline-flex items-center justify-center h-11 px-6 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
                 {{ loading ? 'Buscando...' : 'Buscar' }}
             </button>
