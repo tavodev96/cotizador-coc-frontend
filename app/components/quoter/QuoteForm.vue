@@ -334,22 +334,25 @@
                         class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 items-center">
 
                         <input v-model="insumo.codigo" placeholder="Código" class="p-2 border rounded"
-                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-2': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
                         <input v-model="insumo.nombre" placeholder="Nombre" class="p-2 border rounded col-span-4"
-                            :class="[{ 'md:col-span-6': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
-                        <input v-show="!isCodificacion" v-model.number="insumo.valor" type="hidden" />
-                        <input v-show="!isCodificacion" :value="formatearNumero(insumo.valor)" type="text"
-                            class="p-2 border rounded md:col-span-2" placeholder="Valor"
+                        <input v-model.number="insumo.valor" type="hidden" />
+                        <input :value="formatearNumero(insumo.valor)" type="text"
+                            class="p-2 border rounded md:col-span-2"
+                            :class="{ 'bg-slate-100 text-slate-600 cursor-not-allowed': isCodificacion }"
+                            placeholder="Valor"
+                            :readonly="isCodificacion"
                             @input="onInsumoValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
-                        <input v-show="!isCodificacion" v-model.number="insumo.cantidad" placeholder="Cantidad"
+                        <input v-model.number="insumo.cantidad" placeholder="Cantidad"
                             type="number" min="1" class="p-2 border rounded md:col-span-2" />
 
                         <!-- Subtotal calculado -->
-                        <span v-show="!isCodificacion" class="md:col-span-2 text-right font-semibold">
+                        <span class="md:col-span-2 text-right font-semibold">
                             {{ formatCurrency(insumo.cantidad * insumo.valor) }}
                         </span>
 
@@ -371,24 +374,27 @@
 
                         <!-- Código -->
                         <input v-model="lente.codigo" placeholder="Código" class="p-2 border rounded"
-                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-2': isCodificacion, 'md:col-span-1': !isCodificacion }]" disabled />
 
                         <!-- Nombre -->
                         <input v-model="lente.nombre" placeholder="Nombre" class="p-2 border rounded"
-                            :class="[{ 'md:col-span-6': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
+                            :class="[{ 'md:col-span-3': isCodificacion, 'md:col-span-4': !isCodificacion }]" disabled />
 
                         <!-- Valor unitario -->
                         <input v-model.number="lente.valor" type="hidden" />
-                        <input v-show="!isCodificacion" :value="formatearNumero(lente.valor)" type="text"
-                            class="p-2 border rounded md:col-span-2" placeholder="Valor"
+                        <input :value="formatearNumero(lente.valor)" type="text"
+                            class="p-2 border rounded md:col-span-2"
+                            :class="{ 'bg-slate-100 text-slate-600 cursor-not-allowed': isCodificacion }"
+                            placeholder="Valor"
+                            :readonly="isCodificacion"
                             @input="onLenteValorInput($event.target.value, index)" />
 
                         <!-- Cantidad -->
-                        <input v-show="!isCodificacion" v-model.number="lente.cantidad" placeholder="Cantidad"
+                        <input v-model.number="lente.cantidad" placeholder="Cantidad"
                             type="number" min="1" class="p-2 border rounded md:col-span-2" />
 
                         <!-- Subtotal calculado -->
-                        <span v-show="!isCodificacion" class="md:col-span-2 text-right font-semibold">
+                        <span class="md:col-span-2 text-right font-semibold">
                             {{ formatCurrency(lente.cantidad * lente.valor) }}
                         </span>
 
@@ -1300,6 +1306,7 @@ const onItemValorInput = (val, index) => {
 }
 
 const onInsumoValorInput = (val, index) => {
+    if (isCodificacion.value) return;
     const numero = parseNumero(val);
     const insumo = cotizacion.value.insumos[index];
     if (!insumo) return;
@@ -1307,6 +1314,7 @@ const onInsumoValorInput = (val, index) => {
 }
 
 const onLenteValorInput = (val, index) => {
+    if (isCodificacion.value) return;
     const numero = parseNumero(val);
     const lente = cotizacion.value.lentes[index];
     if (!lente) return;

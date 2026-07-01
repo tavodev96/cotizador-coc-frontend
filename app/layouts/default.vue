@@ -189,6 +189,22 @@ watch(sidebarPinned, (value) => {
         </Transition>
       </main>
     </div>
+    <a
+      href="https://mesadeayuda.clinicaofta.com/marketplace/formcreator/front/formdisplay.php?id=11"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Mesa de ayuda"
+      aria-label="Abrir mesa de ayuda"
+      class="fixed bottom-10 right-10 z-50 inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-sky-600 text-white shadow-xl ring-4 ring-sky-100 transition hover:from-indigo-700 hover:to-sky-700 hover:scale-105"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 12a8 8 0 0 1 16 0" />
+        <path d="M4 12v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
+        <path d="M20 12v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
+        <path d="M18 17c0 2-2.5 3-5 3h-1" />
+        <path d="M9 20h3" />
+      </svg>
+    </a>
   </div>
 </template>
 

@@ -805,13 +805,15 @@ const enviarCorreo = async () => {
 
         <template v-if="detallesDesglosados.insumos.length > 0">
           <h2 class="quote-section-title">INSUMOS</h2>
-          <div class="quote-grid" style="grid-template-columns: 92px minmax(0, 1fr) 116px;">
+          <div class="quote-grid cols-4" style="grid-template-columns: 92px minmax(0, 1fr) 54px 116px;">
             <div class="quote-grid-head">Código</div>
             <div class="quote-grid-head">Nombre</div>
+            <div class="quote-grid-head text-center">Cantidad</div>
             <div class="quote-grid-head">Lateralidad</div>
             <template v-for="(detalle, idx) in detallesDesglosados.insumos" :key="`paciente-insumo-${idx}`">
               <div class="quote-grid-cell">{{ detalle.codigo }}</div>
               <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+              <div class="quote-grid-cell text-center">{{ detalle.cantidad || 1 }}</div>
               <div class="quote-grid-cell capitalize">{{ detalle.lateralidad || '-' }}</div>
             </template>
           </div>
@@ -819,13 +821,15 @@ const enviarCorreo = async () => {
 
         <template v-if="detallesDesglosados.lentes.length > 0">
           <h2 class="quote-section-title">LENTES</h2>
-          <div class="quote-grid" style="grid-template-columns: 92px minmax(0, 1fr) 116px;">
+          <div class="quote-grid cols-4" style="grid-template-columns: 92px minmax(0, 1fr) 54px 116px;">
             <div class="quote-grid-head">Código</div>
             <div class="quote-grid-head">Nombre</div>
+            <div class="quote-grid-head text-center">Cantidad</div>
             <div class="quote-grid-head">Lateralidad</div>
             <template v-for="(detalle, idx) in detallesDesglosados.lentes" :key="`paciente-lente-${idx}`">
               <div class="quote-grid-cell">{{ detalle.codigo }}</div>
               <div class="quote-grid-cell">{{ detalle.nombre }}</div>
+              <div class="quote-grid-cell text-center">{{ detalle.cantidad || 1 }}</div>
               <div class="quote-grid-cell capitalize">{{ detalle.lateralidad || '-' }}</div>
             </template>
           </div>

@@ -21,14 +21,21 @@
                 </div>
             </div>
         </div>
-        <div v-if="loading" class="p-6 text-center flex flex-col items-center gap-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
+        <div v-if="redirecting" class="p-6 text-center flex flex-col items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm text-emerald-800">
+            <svg class="animate-spin h-8 w-8 text-emerald-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <div class="font-semibold">Información actualizada. Redirigiendo a impresión…</div>
+        </div>
+        <div v-else-if="loading" class="p-6 text-center flex flex-col items-center gap-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
             <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
             <div class="text-slate-700">Consultando información para editar…</div>
         </div>
-        <QuoteForm v-else mode="edit" @saved="fetchAuditoriaLogs" />
+        <QuoteForm v-else mode="edit" @saved="handleSaved" />
     </div>
 </template>
 
@@ -40,11 +47,13 @@ definePageMeta({
 import QuoteForm from '../../../components/quoter/QuoteForm.vue'
 
 const route = useRoute()
+const router = useRouter()
 
 const { getById } = useCotizacionApi()
 const { paciente, cotizacion, codificacion } = useCotizacionForm()
 
 const loading = ref(true)
+const redirecting = ref(false)
 const auditoriaLogs = ref([])
 const loadingAuditoriaLogs = ref(false)
 
@@ -57,6 +66,20 @@ const vigenciaLogs = computed(() =>
     )
 )
 
+const normalizarFecha = (value) => String(value || '').slice(0, 10)
+
+const calcularDiasVigencia = (fechaAutorizacion, fechaVigencia) => {
+    const inicio = normalizarFecha(fechaAutorizacion)
+    const fin = normalizarFecha(fechaVigencia)
+    if (!inicio || !fin) return ''
+
+    const inicioDate = new Date(`${inicio}T00:00:00`)
+    const finDate = new Date(`${fin}T00:00:00`)
+    if (Number.isNaN(inicioDate.getTime()) || Number.isNaN(finDate.getTime())) return ''
+
+    return String(Math.max(0, Math.round((finDate.getTime() - inicioDate.getTime()) / 86400000)))
+}
+
 const fetchAuditoriaLogs = async () => {
     loadingAuditoriaLogs.value = true
     const { data, error } = await useSanctumFetch(`/api/auditoria/cotizacion/${route.params.id}`)
@@ -66,6 +89,21 @@ const fetchAuditoriaLogs = async () => {
     }
 
     loadingAuditoriaLogs.value = false
+}
+
+const handleSaved = async () => {
+    redirecting.value = true
+    await nextTick()
+
+    if (process.client) {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    await fetchAuditoriaLogs()
+
+    setTimeout(() => {
+        router.push(`/cotizacion/imprimir/${route.params.id}`)
+    }, 2000)
 }
 
 onMounted(async () => {
@@ -129,17 +167,20 @@ onMounted(async () => {
         })(),
     }
 
-    if (c.codificacion) {
+    const codificacionData = c.codificacion || c.cotizacion?.codificacion || null
+
+    if (codificacionData) {
         codificacion.value = {
-            autorizacion: c.codificacion.numero_autorizacion ?? '',
-            copago: c.codificacion.copago ?? '0',
-            excedenteTope: c.codificacion.excedente_tope ?? '0',
-            lentes: c.codificacion.lente ?? '0',
-            auxilioLente: c.codificacion.auxilio_lente ?? '0',
-            preAnestesia: c.codificacion.pre_anestesia ?? '0',
-            otros: c.codificacion.otros_costos ?? '0',
-            fechaVigencia: c.codificacion.fecha_vigencia ?? '',
-            fechaAutorizacion: c.codificacion.fecha_autorizacion ?? '',
+            autorizacion: codificacionData.numero_autorizacion ?? '',
+            copago: codificacionData.copago ?? '0',
+            excedenteTope: codificacionData.excedente_tope ?? '0',
+            lentes: codificacionData.lente ?? '0',
+            auxilioLente: codificacionData.auxilio_lente ?? '0',
+            preAnestesia: codificacionData.pre_anestesia ?? '0',
+            otros: codificacionData.otros_costos ?? '0',
+            fechaVigencia: normalizarFecha(codificacionData.fecha_vigencia),
+            fechaAutorizacion: normalizarFecha(codificacionData.fecha_autorizacion),
+            diasVigencia: calcularDiasVigencia(codificacionData.fecha_autorizacion, codificacionData.fecha_vigencia),
         }
     }
 

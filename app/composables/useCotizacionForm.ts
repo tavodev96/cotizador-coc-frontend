@@ -36,6 +36,7 @@ export const useCotizacionForm = () => {
     otros: '0',
     fechaVigencia: '',
     fechaAutorizacion: '',
+    diasVigencia: '',
   }))
 
   const totalProcedimientos = computed(() =>

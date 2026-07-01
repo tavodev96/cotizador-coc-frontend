@@ -25,6 +25,7 @@ const mostrarModalVigencia = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
+const refrescandoEstado = ref(false)
 const loadingEstadoGestion = ref(false)
 const savingPriority = ref(false)
 const syncingSalesforce = ref(false)
@@ -44,6 +45,7 @@ const intendedEstado = ref(null)
 const mostrarModalComentario = ref(false)
 const estadoSeleccionadoTemp = ref(null)
 const fechaProgramadaTemp = ref('')
+const fechaRealizadaTemp = ref('')
 
 const normalizarFechaInput = (value) => {
   if (!value) return ''
@@ -87,6 +89,7 @@ const fetchDetalle = async () => {
     estadoSeleccionadoTemp.value = cotizacion.value.estado_id
     estadoGestionSeleccionado.value = cotizacion.value.estado_gestion_id || ''
     fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_programada)
+    fechaRealizadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_realizado)
 
   } catch (err) {
     console.error('Error capturado en fetchDetalle:', err)
@@ -281,6 +284,7 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
       comentario_cambio_estado: options.comentario || null,
       fecha_programada: Number(estadoId) === 5 ? (options.fechaProgramada || null) : null,
       hora_programada: Number(estadoId) === 5 ? (options.horaProgramada || horaProgramadaParaFecha(options.fechaProgramada)) : null,
+      fecha_realizado: esEstadoRealizado(estadoId) ? (options.fechaRealizado || null) : null,
     }
 
     const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/estado`, {
@@ -299,11 +303,15 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
     }
 
     pushNotification('success', 'Estado actualizado con éxito', 'Éxito')
+    refrescandoEstado.value = true
+    pushNotification('info', 'Actualizando la información de la cotización...', 'Refrescando')
 
-    // Pequeño delay antes de refrescar
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await Promise.all([
+      fetchDetalle(),
+      fetchAuditoriaLogs(),
+    ])
 
-    await router.replace({ path: route.path, query: { _t: Date.now() } })
+    await nextTick()
 
     // return true
 
@@ -313,6 +321,7 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
     return false
   } finally {
     loadingEstados.value = false
+    refrescandoEstado.value = false
   }
 }
 
@@ -323,6 +332,10 @@ const cambiarEstado = async () => {
   const estadoActual = cotizacion.value?.estado_id
   const fechaProgramadaActual = normalizarFechaInput(cotizacion.value?.fecha_programada)
   const fechaProgramadaNueva = normalizarFechaInput(fechaProgramadaTemp.value)
+  const fechaRealizadaActual = normalizarFechaInput(cotizacion.value?.fecha_realizado)
+  const fechaRealizadaNueva = normalizarFechaInput(fechaRealizadaTemp.value)
+  const pasaARealizado = esEstadoRealizado(nueva) && !esEstadoRealizado(estadoActual)
+  const cambiaFechaRealizada = esEstadoRealizado(nueva) && fechaRealizadaActual !== fechaRealizadaNueva
 
   intendedEstado.value = nueva
 
@@ -331,7 +344,7 @@ const cambiarEstado = async () => {
   const saleDeProgramada = Number(estadoActual) === 5 && Number(nueva) !== 5
   const cambiaFechaProgramada = Number(estadoActual) === 5 && Number(nueva) === 5 && fechaProgramadaActual !== fechaProgramadaNueva
 
-  if (Number(nueva) === Number(estadoActual) && fechaProgramadaActual === fechaProgramadaNueva) {
+  if (Number(nueva) === Number(estadoActual) && fechaProgramadaActual === fechaProgramadaNueva && fechaRealizadaActual === fechaRealizadaNueva) {
     pushNotification('info', 'No hay cambios para guardar en estado/fecha programada.', 'Sin cambios')
     return
   }
@@ -341,7 +354,12 @@ const cambiarEstado = async () => {
     return
   }
 
-  if ((requiereComentarioNuevo || requiereComentarioSalida || saleDeProgramada || cambiaFechaProgramada) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
+  if (esEstadoRealizado(nueva) && !fechaRealizadaNueva) {
+    pushNotification('error', 'Debes seleccionar la fecha realizada para el estado REALIZADO.', 'Error')
+    return
+  }
+
+  if ((requiereComentarioNuevo || requiereComentarioSalida || saleDeProgramada || cambiaFechaProgramada || pasaARealizado || cambiaFechaRealizada) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
     mostrarModalComentario.value = true
     estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
     return
@@ -350,6 +368,7 @@ const cambiarEstado = async () => {
   await realizarCambioEstado(nueva, {
     comentario: nuevoComentario.value?.trim() || null,
     fechaProgramada: fechaProgramadaNueva || null,
+    fechaRealizado: fechaRealizadaNueva || null,
   })
 }
 
@@ -358,6 +377,7 @@ const enviarComentarioYEstado = async () => {
     await realizarCambioEstado(intendedEstado.value, {
       comentario: nuevoComentario.value?.trim() || null,
       fechaProgramada: normalizarFechaInput(fechaProgramadaTemp.value) || null,
+      fechaRealizado: normalizarFechaInput(fechaRealizadaTemp.value) || null,
     })
     estadoSeleccionadoTemp.value = intendedEstado.value
   }
@@ -373,6 +393,7 @@ const cancelarModalComentario = () => {
   estadoSeleccionado.value = cotizacion.value?.estado_id || null
   estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
   fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value?.fecha_programada)
+  fechaRealizadaTemp.value = normalizarFechaInput(cotizacion.value?.fecha_realizado)
   intendedEstado.value = null
 }
 
@@ -543,6 +564,11 @@ const fechaAutorizacionFormateada = computed(() => {
 })
 
 const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_id) === 5)
+const esEstadoRealizado = (estadoId) => {
+  const estado = estadosAdministrativos.value.find((item) => Number(item.id) === Number(estadoId))
+  return String(estado?.nombre || '').toUpperCase().trim() === 'REALIZADO'
+}
+const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.value?.estado_id))
 </script>
 
 <template>
@@ -573,6 +599,13 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
     <Notivue v-slot="item">
       <Notification :item="item" :icons="filledIcons" />
     </Notivue>
+    <div v-if="refrescandoEstado" class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 shadow-sm flex items-center gap-2">
+      <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      Refrescando la vista para mostrar los cambios del estado...
+    </div>
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
       <div class="flex flex-col gap-2">
@@ -603,6 +636,10 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
           <span class="font-bold">Fecha programada:</span>
           <span class="bg-amber-100 text-amber-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.fecha_programada }}</span>
         </p>
+        <p v-if="cotizacion?.fecha_realizado" class="text-slate-700">
+          <span class="font-bold">Fecha realizada:</span>
+          <span class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.fecha_realizado }}</span>
+        </p>
         <p v-if="cotizacion?.codificacion" class="text-slate-700"><span class="font-bold">Codificación:</span> <span
             class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{
               cotizacion?.codificacion?.numero_autorizacion }}</span></p>
@@ -616,7 +653,7 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
         <div class="flex flex-wrap items-center gap-2">
           <label for="estado" class="font-semibold">Cambiar estado:</label>
-          <select v-model="estadoSeleccionadoTemp" id="estado" class="border border-slate-300 p-2 rounded-lg w-40 bg-white">
+          <select v-model="estadoSeleccionadoTemp" id="estado" class="border border-slate-300 p-2 rounded-lg w-40 bg-white" :disabled="estadoActualEsRealizado">
             <option disabled value="" selected>Estados</option>
             <option v-for="estado in estadosAdministrativos" :value="estado.id" :key="estado.id">
               {{ estado.nombre }}
@@ -631,9 +668,19 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
           <span v-else-if="Number(estadoSeleccionadoTemp) === 5 && estadoActualEsProgramada" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             Fecha programada: {{ cotizacion?.fecha_programada || 'Sin fecha' }}. Modificar solo desde Programación.
           </span>
+          <input
+            v-if="esEstadoRealizado(estadoSeleccionadoTemp)"
+            v-model="fechaRealizadaTemp"
+            type="date"
+            class="border border-slate-300 p-2 rounded-lg bg-white"
+            :disabled="estadoActualEsRealizado"
+          />
+          <span v-if="estadoActualEsRealizado" class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            Estado final REALIZADO. No permite nuevos cambios de estado.
+          </span>
           <button @click="cambiarEstado"
             class="flex justify-center items-center gap-2 bg-indigo-700 text-white px-4 py-2 rounded-lg"
-            :disabled="loadingEstados">
+            :disabled="loadingEstados || estadoActualEsRealizado">
             <template v-if="!loadingEstados">Actualizar</template>
             <template v-else>
               <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -700,7 +747,9 @@ const estadoActualEsProgramada = computed(() => Number(cotizacion.value?.estado_
             <path fill="#1E9C07"
               d="m10.6 16.2l7.05-7.05l-1.4-1.4l-5.65 5.65l-2.85-2.85l-1.4 1.4zM5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM5 5v14z" />
           </svg>
-          {{ detalle.codigo }} - {{ detalle.nombre }} <span v-show="!cotizacion?.codificacion?.numero_autorizacion">${{
+          {{ detalle.codigo }} - {{ detalle.nombre }}
+          <span class="text-slate-600 font-semibold">x{{ detalle.cantidad || 1 }}</span>
+          <span v-show="!cotizacion?.codificacion?.numero_autorizacion">${{
             detalle.valor }}</span>
           <span v-if="detalle.tipo == 'L'" class="text-blue-600 font-bold">- (LENTE)
           </span>
