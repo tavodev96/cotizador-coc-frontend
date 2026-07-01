@@ -14,7 +14,7 @@
     </div>
 
     <!-- Consultas - Visible si puede ver cotizaciones -->
-    <div v-if="hasPermission('cotizar.ver')" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
+    <div v-if="canAccessConsultas" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Consultas</p>
       <SidebarLink label="Cotizaciones" link="/consultas/cotizaciones" />
     </div>
@@ -86,6 +86,10 @@ const isConfigAdmin = computed(() => {
 // Verificar si puede acceder a la sección de cotizaciones
 const canAccessGestion = computed(() => {
   return hasAnyPermission(['cotizar.crear', 'cotizar.ver', 'cotizar.editar'])
+})
+
+const canAccessConsultas = computed(() => {
+  return hasAnyPermission(['cotizar.ver', 'consultas.cotizaciones.ver']) || hasRole('cajero') || hasRole('Cajero') || isAdmin.value || isSuperAdmin.value
 })
 
 // Verificar si puede acceder a tarifas

@@ -50,6 +50,7 @@ export const useDashboardData = () => {
         distribucion_tipo_gestion?: Array<{ tipo_gestion: string; total: number; porcentaje: number }>;
         top_entidades?: Array<{ nombre: string; total: number; monto_total: number }>;
         alertas_sin_movimiento_48h?: number;
+        ultima_cotizacion?: string | null;
     };
 
     const createEmptyMetricasDashboard = () => ({
@@ -63,6 +64,7 @@ export const useDashboardData = () => {
         },
         top_entidades: [] as Array<{ nombre: string; total: number; monto_total: number }>,
         alertas_sin_movimiento_48h: 0,
+        ultima_cotizacion: null as string | null,
     });
 
     const createEmptyRoleDashboard = (): RoleDashboard => ({

@@ -208,10 +208,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { push } from "notivue"
 
 const { consultarPorHistoria } = useConsultas()
+const route = useRoute()
 
 const search = ref("")
 const cotizaciones = ref([])
@@ -257,6 +258,7 @@ const fetchCotizaciones = async () => {
         }
         
         cotizaciones.value = datos
+        guardarBusquedaReciente(search.value, datos.length)
         
         push.success({
             title: "Búsqueda exitosa",
@@ -270,6 +272,29 @@ const fetchCotizaciones = async () => {
     } finally {
         cargando.value = false
     }
+}
+
+const guardarBusquedaReciente = (documento, resultados) => {
+    if (import.meta.server) return
+
+    const documentoNormalizado = String(documento || '').trim()
+    if (!documentoNormalizado) return
+
+    let recientes = []
+    try {
+        recientes = JSON.parse(localStorage.getItem('consultas-cotizaciones-recientes') || '[]')
+    } catch {
+        recientes = []
+    }
+
+    const filtradas = recientes.filter((item) => item.documento !== documentoNormalizado)
+    filtradas.unshift({
+        documento: documentoNormalizado,
+        resultados,
+        fecha: new Date().toISOString(),
+    })
+
+    localStorage.setItem('consultas-cotizaciones-recientes', JSON.stringify(filtradas.slice(0, 6)))
 }
 
 const limpiarResultados = () => {
@@ -511,4 +536,12 @@ const formatearNumero = (valor, decimals = 2) => {
 }
 
 const formatearMoneda = (valor) => `$${formatearNumero(valor, 0)}`
+
+onMounted(() => {
+    const documento = String(route.query.documento || '').trim()
+    if (!documento) return
+
+    search.value = documento
+    fetchCotizaciones()
+})
 </script>
