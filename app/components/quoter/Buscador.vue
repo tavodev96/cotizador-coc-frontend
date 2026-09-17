@@ -2,7 +2,11 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const props = defineProps({
-    reset: Boolean
+    reset: Boolean,
+    columnFilters: {
+        type: Object,
+        default: () => ({}),
+    },
 })
 
 const emit = defineEmits(['resultados', 'loading', 'pagination'])
@@ -21,7 +25,7 @@ const filtros = ref({
     medico_id: '',
     entidad_id: '',
     asesor_id: '',
-    estado_id: '',
+    estado_ids: [],
     estado_gestion_id: ''
 })
 
@@ -53,6 +57,7 @@ const buscadorAsesor = ref('')
 const mostrarDropdownMedicos = ref(false)
 const mostrarDropdownEntidades = ref(false)
 const mostrarDropdownAsesores = ref(false)
+const mostrarDropdownEstados = ref(false)
 
 const loading = ref(false)
 const pagination = ref({
@@ -137,12 +142,11 @@ const applyRouteFilters = () => {
     filtros.value.medico_id = maybeString(query.medico_id)
     filtros.value.entidad_id = maybeString(query.entidad_id)
     filtros.value.asesor_id = maybeString(query.asesor_id)
-    filtros.value.estado_id = maybeString(query.estado_id)
+    const estadoIdsQuery = maybeString(query.estado_ids)
+    filtros.value.estado_ids = estadoIdsQuery
+        ? estadoIdsQuery.split(',').map(item => item.trim()).filter(Boolean).map(item => item === '4' ? '6' : item).filter((item, index, array) => array.indexOf(item) === index)
+        : (maybeString(query.estado_id) ? [maybeString(query.estado_id) === '4' ? '6' : maybeString(query.estado_id)] : [])
     filtros.value.estado_gestion_id = maybeString(query.estado_gestion_id)
-
-    if (filtros.value.estado_id === '4') {
-        filtros.value.estado_id = '6'
-    }
 
     const medicoSeleccionado = medicos.value.find(item => String(item.id) === filtros.value.medico_id)
     buscadorMedico.value = medicoSeleccionado?.nombre || ''
@@ -166,8 +170,33 @@ const hasRouteFilters = () => {
         'entidad_id',
         'asesor_id',
         'estado_id',
+        'estado_ids',
         'estado_gestion_id',
     ].some(key => Boolean(route.query[key]))
+}
+
+const estadoIdsSeleccionadosParam = () => {
+    const ids = new Set()
+    filtros.value.estado_ids.forEach((id) => {
+        const valor = String(id)
+        if (valor === '6') {
+            ids.add('4')
+            ids.add('6')
+            return
+        }
+        if (valor) ids.add(valor)
+    })
+    return Array.from(ids).join(',')
+}
+
+const columnFiltersParam = () => {
+    const activos = Object.entries(props.columnFilters || {}).reduce((acc, [key, value]) => {
+        const texto = String(value ?? '').trim()
+        if (texto) acc[key] = texto
+        return acc
+    }, {})
+
+    return Object.keys(activos).length ? JSON.stringify(activos) : undefined
 }
 
 const seleccionarMedico = (medico) => {
@@ -237,6 +266,28 @@ const cerrarDropdowns = () => {
     mostrarDropdownMedicos.value = false
     mostrarDropdownEntidades.value = false
     mostrarDropdownAsesores.value = false
+    mostrarDropdownEstados.value = false
+}
+
+const alternarEstado = (estadoId) => {
+    const id = String(estadoId)
+    const actuales = new Set((filtros.value.estado_ids || []).map(item => String(item)))
+
+    if (actuales.has(id)) {
+        actuales.delete(id)
+    } else {
+        actuales.add(id)
+    }
+
+    filtros.value.estado_ids = Array.from(actuales)
+}
+
+const limpiarEstados = () => {
+    filtros.value.estado_ids = []
+}
+
+const estadoSeleccionado = (estadoId) => {
+    return (filtros.value.estado_ids || []).map(item => String(item)).includes(String(estadoId))
 }
 
 const handleClickOutsideDropdowns = (event) => {
@@ -253,6 +304,10 @@ const handleClickOutsideDropdowns = (event) => {
 
     if (!target.closest('[data-dropdown="asesor"]')) {
         mostrarDropdownAsesores.value = false
+    }
+
+    if (!target.closest('[data-dropdown="estado-cotizacion"]')) {
+        mostrarDropdownEstados.value = false
     }
 }
 
@@ -272,9 +327,9 @@ const buscar = async (page = 1) => {
                 medico_id: filtros.value.medico_id,
                 entidad_id: filtros.value.entidad_id,
                 asesor_id: filtros.value.asesor_id,
-                estado_id: filtros.value.estado_id,
+                estado_ids: estadoIdsSeleccionadosParam() || undefined,
                 estado_gestion_id: filtros.value.estado_gestion_id,
-                estado_ids: filtros.value.estado_id === '6' ? '4,6' : undefined,
+                column_filters: columnFiltersParam(),
                 page,
                 per_page: pagination.value.per_page,
                 _t: Date.now() // evita cache agregando timestamp
@@ -310,6 +365,17 @@ defineExpose({
     buscar,
 })
 
+const estadosSeleccionados = computed(() => {
+    const seleccionados = new Set((filtros.value.estado_ids || []).map(id => String(id)))
+    return estadosFiltrados.value.filter(estado => seleccionados.has(String(estado.id)))
+})
+
+const etiquetaEstadosSeleccionados = computed(() => {
+    if (!estadosSeleccionados.value.length) return 'Estado de cotización'
+    if (estadosSeleccionados.value.length === 1) return estadosSeleccionados.value[0]?.nombre || '1 estado seleccionado'
+    return `${estadosSeleccionados.value.length} estados seleccionados`
+})
+
 const buscarPendientesSinGestion = async () => {
     filtros.value.codigo = ''
     filtros.value.documento = ''
@@ -320,7 +386,7 @@ const buscarPendientesSinGestion = async () => {
     filtros.value.medico_id = ''
     filtros.value.entidad_id = ''
     filtros.value.asesor_id = ''
-    filtros.value.estado_id = '1'
+    filtros.value.estado_ids = ['1']
     filtros.value.estado_gestion_id = 'sin_gestion'
     buscadorMedico.value = ''
     buscadorEntidad.value = ''
@@ -353,7 +419,7 @@ watch(() => props.reset, () => {
     filtros.value.medico_id = ''
     filtros.value.entidad_id = ''
     filtros.value.asesor_id = ''
-    filtros.value.estado_id = ''
+    filtros.value.estado_ids = []
     filtros.value.estado_gestion_id = ''
     buscadorMedico.value = ''
     buscadorEntidad.value = ''
@@ -464,12 +530,81 @@ watch(() => route.query, async () => {
 
         <input type="date" v-model="filtros.fecha_inicio" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
         <input type="date" v-model="filtros.fecha_fin" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" />
-        <select v-model="filtros.estado_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
-            <option value="">Estado de cotización</option>
-            <option v-for="estado in estadosFiltrados" :key="estado.id" :value="String(estado.id)">
-                {{ estado.nombre }}
-            </option>
-        </select>
+        <div class="relative w-full" data-dropdown="estado-cotizacion">
+            <button
+                type="button"
+                class="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 transition hover:border-indigo-300 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                :class="mostrarDropdownEstados ? 'border-indigo-500 ring-2 ring-indigo-100' : ''"
+                @click="mostrarDropdownEstados = !mostrarDropdownEstados"
+            >
+                <span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                    <span v-if="!estadosSeleccionados.length" class="text-slate-500">Estado de cotización</span>
+                    <template v-else>
+                        <span
+                            v-for="estado in estadosSeleccionados.slice(0, 2)"
+                            :key="estado.id"
+                            class="max-w-[9rem] truncate rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100"
+                        >
+                            {{ estado.nombre }}
+                        </span>
+                        <span v-if="estadosSeleccionados.length > 2" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            +{{ estadosSeleccionados.length - 2 }}
+                        </span>
+                    </template>
+                </span>
+                <span class="flex items-center gap-2">
+                    <span v-if="estadosSeleccionados.length" class="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white">
+                        {{ estadosSeleccionados.length }}
+                    </span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition" :class="mostrarDropdownEstados ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06" clip-rule="evenodd" />
+                    </svg>
+                </span>
+            </button>
+
+            <div
+                v-if="mostrarDropdownEstados"
+                class="absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+                @mousedown.prevent
+            >
+                <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Estado de cotización</p>
+                    <button
+                        v-if="estadosSeleccionados.length"
+                        type="button"
+                        class="text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+                        @mousedown.prevent="limpiarEstados"
+                    >
+                        Limpiar
+                    </button>
+                </div>
+
+                <div class="max-h-64 overflow-y-auto py-1">
+                    <button
+                        v-for="estado in estadosFiltrados"
+                        :key="estado.id"
+                        type="button"
+                        class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-indigo-50"
+                        :class="estadoSeleccionado(estado.id) ? 'bg-indigo-50 text-indigo-800' : ''"
+                        @mousedown.prevent="alternarEstado(estado.id)"
+                    >
+                        <span
+                            class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition"
+                            :class="estadoSeleccionado(estado.id) ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-transparent'"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.31a1 1 0 0 1-1.42 0l-3.25-3.28a1 1 0 0 1 1.42-1.408l2.54 2.563l6.54-6.593a1 1 0 0 1 1.414-.006" clip-rule="evenodd" />
+                            </svg>
+                        </span>
+                        <span class="font-medium">{{ estado.nombre }}</span>
+                    </button>
+                </div>
+
+                <div class="border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    {{ etiquetaEstadosSeleccionados }}
+                </div>
+            </div>
+        </div>
         </div>
 
         <div class="flex flex-wrap justify-end gap-2">

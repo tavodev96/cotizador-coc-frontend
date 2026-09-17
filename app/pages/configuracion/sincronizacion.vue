@@ -40,6 +40,11 @@ const mainPipelines = [
     title: 'Sincronizar pacientes desde Informix',
     description: 'Importa o actualiza todos los pacientes por número de identificación en lotes grandes.',
   },
+  {
+    key: 'ordenamientos_servinte',
+    title: 'Sincronizar ordenamientos Servinte',
+    description: 'Consulta el API de ordenamientos y actualiza la tabla local usada por Autogestión.',
+  },
 ] as const
 
 const maintenancePipelines = [
@@ -87,11 +92,21 @@ const maintenancePipelines = [
 
 const pipelines = [...mainPipelines, ...maintenancePipelines] as const
 
+const fechaLocal = () => {
+  const fecha = new Date()
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${fecha.getFullYear()}-${mes}-${dia}`
+}
+
 // ── Filtros historial ──────────────────────────────────────
 const filterStatus   = ref('')
 const filterPipeline = ref('')
 const filterDateFrom = ref('')
 const filterDateTo   = ref('')
+const ordenamientosFechaInicio = ref(fechaLocal())
+const ordenamientosFechaFin = ref(fechaLocal())
+const ordenamientosFechaError = ref('')
 const ocultarResultadoEstado = ref(false)
 const ocultarResultadoPasos = ref(false)
 const historyOpenIds = ref<Set<number>>(new Set())
@@ -156,7 +171,27 @@ const toggleHistory = (id: number) => {
 const isHistoryOpen = (id: number) => historyOpenIds.value.has(id)
 
 const ejecutar = async (pipeline: typeof pipelines[number]['key']) => {
-  const response = await runPipeline(pipeline)
+  ordenamientosFechaError.value = ''
+  const options: Record<string, string> = {}
+
+  if (pipeline === 'ordenamientos_servinte') {
+    if (!ordenamientosFechaInicio.value || !ordenamientosFechaFin.value) {
+      ordenamientosFechaError.value = 'Debe seleccionar fecha inicial y fecha final.'
+      push.warning({ title: 'Rango requerido', message: ordenamientosFechaError.value })
+      return
+    }
+
+    if (ordenamientosFechaFin.value < ordenamientosFechaInicio.value) {
+      ordenamientosFechaError.value = 'La fecha final debe ser mayor o igual a la fecha inicial.'
+      push.warning({ title: 'Rango inválido', message: ordenamientosFechaError.value })
+      return
+    }
+
+    options.fecha_inicio = ordenamientosFechaInicio.value
+    options.fecha_fin = ordenamientosFechaFin.value
+  }
+
+  const response = await runPipeline(pipeline, options)
 
   if (!response.ok) {
     push.error({ title: 'Sincronización', message: response.message })
@@ -260,6 +295,31 @@ onMounted(async () => {
         >
           <h3 class="text-base font-semibold text-slate-900">{{ item.title }}</h3>
           <p class="text-sm text-slate-600 mt-2">{{ item.description }}</p>
+          <div v-if="item.key === 'ordenamientos_servinte'" class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Rango de ordenamientos</p>
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Fecha inicial</label>
+                <input
+                  v-model="ordenamientosFechaInicio"
+                  type="date"
+                  class="w-full h-9 rounded-lg border border-slate-300 bg-white text-sm px-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                  :disabled="status.running || runningAction"
+                >
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Fecha final</label>
+                <input
+                  v-model="ordenamientosFechaFin"
+                  type="date"
+                  class="w-full h-9 rounded-lg border border-slate-300 bg-white text-sm px-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                  :disabled="status.running || runningAction"
+                >
+              </div>
+            </div>
+            <p v-if="ordenamientosFechaError" class="mt-2 text-xs font-medium text-rose-600">{{ ordenamientosFechaError }}</p>
+            <p v-else class="mt-2 text-xs text-slate-500">La fecha final debe ser mayor o igual a la fecha inicial.</p>
+          </div>
           <button
             class="mt-4 h-10 px-4 rounded-lg bg-[#162983] text-white disabled:opacity-60 disabled:cursor-not-allowed"
             :disabled="status.running || runningAction"
@@ -356,6 +416,7 @@ onMounted(async () => {
             <option value="crear_medicos">Crear médicos</option>
             <option value="recursos_consultorios">Recursos a consultorios</option>
             <option value="pacientes_informix">Pacientes Informix (sync completa)</option>
+            <option value="ordenamientos_servinte">Ordenamientos Servinte</option>
             <option value="pacientes_nuevos_informix">Pacientes nuevos Informix</option>
             <option value="pacientes_existentes_informix">Pacientes existentes Informix</option>
             <option value="codigos_laser_procedimientos">Códigos láser a procedimientos</option>

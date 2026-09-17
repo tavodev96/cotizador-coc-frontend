@@ -11,6 +11,7 @@
       <SidebarLink v-if="hasPermission('cotizar.crear')" label="Cotizar" link="/gestion/cotizacion" />
       <SidebarLink v-if="hasPermission('cotizar.ver')" label="Seguimiento" link="/gestion/seguimiento" />
       <SidebarLink v-if="hasPermission('cotizar.ver')" label="Ordenamientos" link="/ordenamientos" />
+      <SidebarLink v-if="canAccessAutogestion" label="Autogestión" link="/gestion/autogestion" />
     </div>
 
     <!-- Consultas - Visible si puede ver cotizaciones -->
@@ -38,6 +39,7 @@
     <div v-if="canAccessReportes" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Reportes</p>
       <SidebarLink v-if="canAccessReporteCotizaciones" label="Reporte de cotizaciones" link="/reportes/cotizaciones" />
+      <SidebarLink v-if="canAccessReporteSalesforce" label="Reporte Salesforce" link="/reportes/salesforce" />
     </div>
 
     <!-- Configuración - Visible si tiene permisos de configuración -->
@@ -85,7 +87,11 @@ const isConfigAdmin = computed(() => {
 
 // Verificar si puede acceder a la sección de cotizaciones
 const canAccessGestion = computed(() => {
-  return hasAnyPermission(['cotizar.crear', 'cotizar.ver', 'cotizar.editar'])
+  return hasAnyPermission(['cotizar.crear', 'cotizar.ver', 'cotizar.editar', 'autogestion.ver'])
+})
+
+const canAccessAutogestion = computed(() => {
+  return hasPermission('autogestion.ver') || isAdmin.value || isSuperAdmin.value
 })
 
 const canAccessConsultas = computed(() => {
@@ -123,10 +129,14 @@ const canAccessRolesPermisosConfig = computed(() => {
 })
 
 const canAccessReportes = computed(() => {
-  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver']) || isAdmin.value || isSuperAdmin.value
+  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver', 'integraciones.salesforce.ver_logs']) || isAdmin.value || isSuperAdmin.value
 })
 
 const canAccessReporteCotizaciones = computed(() => {
   return hasPermission('reportes.cotizaciones.ver') || isAdmin.value || isSuperAdmin.value
+})
+
+const canAccessReporteSalesforce = computed(() => {
+  return hasPermission('reportes.cotizaciones.ver') || hasPermission('integraciones.salesforce.ver_logs') || isAdmin.value || isSuperAdmin.value
 })
 </script>
