@@ -7,6 +7,7 @@ import { Notivue, Notification, filledIcons } from 'notivue'
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
+const { hasPermission, hasRole } = useUserPermissions()
 
 const apiBase = config.public.apiBase?.replace('/api', '') || 'http://localhost:8000'
 const fileUrl = (path) => `${apiBase}/storage/${path}`
@@ -30,16 +31,18 @@ const loadingEstadoGestion = ref(false)
 const savingPriority = ref(false)
 const syncingSalesforce = ref(false)
 const lastSalesforceLog = ref(null)
-const canSyncSalesforce = ref(false)
 const auditoriaLogs = ref([])
 const loadingAuditoriaLogs = ref(false)
 
-const checkSalesforcePermission = () => {
-  const user = useUserStore?.()
-  if (user && user.permissions) {
-    canSyncSalesforce.value = user.permissions.includes('integraciones.salesforce.sincronizar')
-  }
-}
+const canRetrySalesforce = computed(() => {
+  return hasPermission('integraciones.salesforce.reintento') || hasRole('admin') || hasRole('Admin') || hasRole('administrador') || hasRole('Administrador') || hasRole('superadmin') || hasRole('Superadmin')
+})
+
+const salesforceStatusActual = computed(() => cotizacion.value?.salesforce_status || lastSalesforceLog.value?.status || 'not_sent')
+const puedeEnviarSalesforce = computed(() => {
+  const status = String(salesforceStatusActual.value || '').toLowerCase()
+  return status !== 'success' && status !== 'enviada'
+})
 
 const intendedEstado = ref(null)
 const mostrarModalComentario = ref(false)
@@ -84,7 +87,9 @@ const fetchDetalle = async () => {
     cotizacion.value = { ...data.value.cotizacion }
     lastSalesforceLog.value = data.value.cotizacion.salesforce_last_log || null
     historico_estados.value = [...data.value.estados]
-    estadosGestion.value = Array.isArray(data.value.estados_gestion) ? data.value.estados_gestion : []
+    estadosGestion.value = Array.isArray(data.value.estados_gestion)
+      ? data.value.estados_gestion.filter((estado) => !['REALIZADO', 'PROGRAMADO', 'PROGRAMADA'].includes(String(estado?.nombre || '').toUpperCase().trim()))
+      : []
     estadoSeleccionado.value = cotizacion.value.estado_id
     estadoSeleccionadoTemp.value = cotizacion.value.estado_id
     estadoGestionSeleccionado.value = cotizacion.value.estado_gestion_id || ''
@@ -156,19 +161,42 @@ const pushNotification = (type, message, title) => {
   })
 }
 
+const contieneReferenciaCuentaSalesforce = (payload) => {
+  if (!payload) return false
+
+  try {
+    const contenido = typeof payload === 'string' ? payload : JSON.stringify(payload)
+    return contenido.includes('refAccount.records[0].Id')
+  } catch {
+    return false
+  }
+}
+
+const notificarCuentaPacienteSalesforce = (payload) => {
+  if (!contieneReferenciaCuentaSalesforce(payload)) return false
+
+  pushNotification('warning', 'Se debe crear la cuenta del paciente en Salesforce y luego reprocesar.', 'Cuenta Salesforce requerida')
+  return true
+}
+
 const syncSalesforce = async () => {
   if (syncingSalesforce.value) return
   syncingSalesforce.value = true
 
   try {
-    const { data, error } = await useSanctumFetch(`/api/salesforce/sync/${route.params.id}`, { method: 'POST' })
+    const { data, error } = await useSanctumFetch(`/api/salesforce/retry-cotizacion/${route.params.id}`, { method: 'POST' })
 
     if (error.value) {
-      pushNotification('error', 'No se pudo encolar la sincronización con Salesforce', 'Error')
+      if (!notificarCuentaPacienteSalesforce(error.value?.data || error.value)) {
+        pushNotification('error', 'No se pudo encolar la sincronización con Salesforce', 'Error')
+      }
     } else {
       pushNotification('success', 'Sincronización encolada correctamente', 'Éxito')
+      notificarCuentaPacienteSalesforce(data.value)
+      if (cotizacion.value) cotizacion.value.salesforce_status = data.value?.status || 'queued'
       // Cargar el log más reciente
-      await fetchLastSalesforceLog()
+      const log = await fetchLastSalesforceLog()
+      notificarCuentaPacienteSalesforce(log?.response || log?.error_message || log)
     }
   } catch (e) {
     console.error('Error al sincronizar con Salesforce:', e)
@@ -183,10 +211,14 @@ const fetchLastSalesforceLog = async () => {
     const { data } = await useSanctumFetch(`/api/salesforce/logs/${route.params.id}/last`)
     if (data.value?.data) {
       lastSalesforceLog.value = data.value.data
+      if (cotizacion.value) cotizacion.value.salesforce_status = data.value.data.status || cotizacion.value.salesforce_status
+      return data.value.data
     }
   } catch (e) {
     console.error('Error al cargar último log de Salesforce:', e)
   }
+
+  return null
 }
 
 const onFileChange = (e) => {
@@ -297,23 +329,25 @@ const realizarCambioEstado = async (estadoId, options = {}) => {
       return false
     }
 
-    // Actualizar el histórico directamente si viene en la respuesta
+    if (data.value.cotizacion) {
+      cotizacion.value = {
+        ...cotizacion.value,
+        ...data.value.cotizacion,
+      }
+      estadoSeleccionado.value = cotizacion.value.estado_id
+      estadoSeleccionadoTemp.value = cotizacion.value.estado_id
+      fechaProgramadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_programada)
+      fechaRealizadaTemp.value = normalizarFechaInput(cotizacion.value.fecha_realizado)
+    }
+
     if (data.value.historial) {
       historico_estados.value = [...data.value.historial]
     }
 
     pushNotification('success', 'Estado actualizado con éxito', 'Éxito')
-    refrescandoEstado.value = true
-    pushNotification('info', 'Actualizando la información de la cotización...', 'Refrescando')
-
-    await Promise.all([
-      fetchDetalle(),
-      fetchAuditoriaLogs(),
-    ])
-
+    await fetchAuditoriaLogs()
     await nextTick()
-
-    // return true
+    return true
 
   } catch (e) {
     console.error('Error en realizarCambioEstado:', e)
@@ -399,7 +433,6 @@ const cancelarModalComentario = () => {
 
 onMounted(async () => {
   try {
-    // checkSalesforcePermission()
     await Promise.all([
       fetchDetalle(),
       fetchEstados(),
@@ -852,9 +885,9 @@ const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.valu
           
           <NuxtLink :to="`/cotizacion/editar/${cotizacion.id}`"
             class="bg-indigo-700 text-white px-4 py-2 rounded-lg"> Editar</NuxtLink>
-          <button v-if="canSyncSalesforce" @click="syncSalesforce" :disabled="syncingSalesforce"
+          <button v-if="canRetrySalesforce && puedeEnviarSalesforce" @click="syncSalesforce" :disabled="syncingSalesforce"
             class="bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-sky-700 transition">
-            <template v-if="!syncingSalesforce">Sincronizar</template>
+            <template v-if="!syncingSalesforce">Enviar a Salesforce</template>
             <template v-else>
               <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -863,7 +896,7 @@ const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.valu
               Sincronizando...
             </template>
           </button>
-          <div v-if="canSyncSalesforce && lastSalesforceLog" class="flex flex-col gap-1 text-xs p-2 bg-slate-100 rounded-lg">
+          <div v-if="lastSalesforceLog" class="flex flex-col gap-1 text-xs p-2 bg-slate-100 rounded-lg">
             <span class="font-semibold">Última sincronización:</span>
             <span :class="{
               'text-green-600': lastSalesforceLog.status === 'success',

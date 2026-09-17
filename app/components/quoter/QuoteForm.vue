@@ -60,12 +60,12 @@
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Correo</label>
                     <input v-model="paciente.correo" type="email" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
-                        :disabled="paciente.id" />
+                        :disabled="paciente.id && props.mode !== 'edit'" />
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Teléfono</label>
                     <input v-model="paciente.telefono" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
-                        :disabled="paciente.id" />
+                        :disabled="paciente.id && props.mode !== 'edit'" />
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Entidad</label>
@@ -638,6 +638,7 @@ const loadingBuscarCodigo = ref(false);
 const cotizandoLaser = ref(false);
 const cotizandoPlasticaOcular = ref(false);
 const fechaOrdenamiento = ref('');
+const idsOrdenamientoServinte = ref([]);
 const tipoBusquedaCodigo = computed(() => {
     if (cotizandoLaser.value) return 'laser';
     if (cotizandoPlasticaOcular.value) return 'plastica_ocular';
@@ -926,6 +927,7 @@ onMounted(async () => {
 
         if (route.query) {
             fechaOrdenamiento.value = normalizarFechaParaApi(route.query.fecha_ordenamiento)
+            idsOrdenamientoServinte.value = parseQueryValues(route.query.id_ordenamiento, ',')
 
             if (route.query.numero_identificacion) {
                 paciente.value.numero_identificacion = route.query.numero_identificacion
@@ -1540,6 +1542,9 @@ const getApiErrorMessage = (apiError, fallbackMessage) => {
     return data?.message || apiError?.message || fallbackMessage
 }
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const telefonoRegex = /^\+?[0-9\s().-]{7,30}$/
+
 const validarAntesDeGuardar = () => {
     if (!cotizacion.value.origen) return 'Debes seleccionar el origen.'
     if (!cotizacion.value.tipo_gestion) return 'Debes seleccionar el tipo de gestión.'
@@ -1554,6 +1559,14 @@ const validarAntesDeGuardar = () => {
         if (!paciente.value.numero_identificacion) return 'El número de identificación del paciente es obligatorio.'
         if (!paciente.value.nombres) return 'El nombre del paciente es obligatorio.'
         if (!paciente.value.apellidos) return 'Los apellidos del paciente son obligatorios.'
+    }
+
+    if (paciente.value.correo && !emailRegex.test(String(paciente.value.correo).trim())) {
+        return 'El correo del paciente no tiene un formato válido.'
+    }
+
+    if (paciente.value.telefono && !telefonoRegex.test(String(paciente.value.telefono).trim())) {
+        return 'El teléfono del paciente no tiene un formato válido.'
     }
 
     if (isCodificacion.value) {
@@ -1615,9 +1628,15 @@ const guardarCotizacion = async () => {
             }))
         };
 
+        if (idsOrdenamientoServinte.value.length) {
+            payload.ids_ordenamiento_servinte = idsOrdenamientoServinte.value
+        }
+
         // Si existe paciente guardado
         if (paciente.value.id) {
             payload.paciente_id = paciente.value.id;
+            payload.correo = paciente.value.correo || null;
+            payload.telefono = paciente.value.telefono || null;
         } else {
             payload = {
                 ...payload,

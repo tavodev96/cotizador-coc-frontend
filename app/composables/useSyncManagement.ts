@@ -9,6 +9,7 @@ type SyncPipeline =
   | 'crear_medicos'
   | 'recursos_consultorios'
   | 'pacientes_informix'
+  | 'ordenamientos_servinte'
   | 'pacientes_nuevos_informix'
   | 'pacientes_existentes_informix'
   | 'codigos_laser_procedimientos'
@@ -147,12 +148,12 @@ export const useSyncManagement = () => {
     }
   }
 
-  const runPipeline = async (pipeline: SyncPipeline) => {
+  const runPipeline = async (pipeline: SyncPipeline, options: Record<string, string> = {}) => {
     runningAction.value = true
     try {
       const data = await client('/api/sync/run', {
         method: 'POST',
-        body: { pipeline },
+        body: { pipeline, ...options },
       }) as { status?: Partial<SyncStatus> }
 
       status.value = {
