@@ -602,6 +602,9 @@ const esEstadoRealizado = (estadoId) => {
   return String(estado?.nombre || '').toUpperCase().trim() === 'REALIZADO'
 }
 const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.value?.estado_id))
+
+const vieneDeSeguimiento = computed(() => route.query.return_to === 'seguimiento')
+const volverSeguimiento = () => router.push('/gestion/seguimiento')
 </script>
 
 <template>
@@ -632,6 +635,13 @@ const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.valu
     <Notivue v-slot="item">
       <Notification :item="item" :icons="filledIcons" />
     </Notivue>
+    <button
+      v-if="vieneDeSeguimiento"
+      class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+      @click="volverSeguimiento"
+    >
+      ← Volver a seguimiento
+    </button>
     <div v-if="refrescandoEstado" class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 shadow-sm flex items-center gap-2">
       <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

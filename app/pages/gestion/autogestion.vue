@@ -48,15 +48,18 @@
 
         <div class="relative" data-autogestion-dropdown>
           <button type="button" class="select-search-btn" @click="abrirSelector('entidad')">
-            <span class="truncate" :class="filters.entidad_nom ? 'text-slate-800' : 'text-slate-400'">{{ filters.entidad_nom || 'Entidad' }}</span>
+            <span class="truncate" :class="filters.entidades.length ? 'text-slate-800' : 'text-slate-400'">{{ etiquetaMulti('entidad') }}</span>
             <span class="text-slate-400">⌄</span>
           </button>
           <div v-if="dropdowns.entidad" class="select-search-panel">
             <input v-model="busquedasOpciones.entidad" class="input h-10" placeholder="Buscar entidad..." @input="buscarOpcionesDebounced('entidad')" />
-            <button v-if="filters.entidad_nom" class="mt-2 text-xs font-semibold text-slate-500 hover:text-rose-600" @click="limpiarSelector('entidad')">Limpiar entidad</button>
+            <button v-if="filters.entidades.length" class="mt-2 text-xs font-semibold text-slate-500 hover:text-rose-600" @click="limpiarSelector('entidad')">Limpiar entidades</button>
             <div class="mt-2 max-h-56 overflow-auto">
               <button v-for="opcion in opciones.entidad" :key="`${opcion.value}-${opcion.codigo || ''}`" class="option-row" @click="seleccionarOpcion('entidad', opcion)">
-                <span class="font-medium">{{ opcion.value }}</span>
+                <span class="flex items-center justify-between gap-2">
+                  <span class="font-medium">{{ opcion.value }}</span>
+                  <span v-if="opcionMultiSeleccionada('entidad', opcion)" class="text-emerald-600">✓</span>
+                </span>
                 <span v-if="opcion.codigo" class="text-xs text-slate-500">{{ opcion.codigo }}</span>
               </button>
               <p v-if="!cargandoOpciones.entidad && !opciones.entidad.length" class="px-2 py-3 text-sm text-slate-500">Sin opciones.</p>
@@ -69,14 +72,19 @@
 
         <div class="relative" data-autogestion-dropdown>
           <button type="button" class="select-search-btn" @click="abrirSelector('medico')">
-            <span class="truncate" :class="filters.medico ? 'text-slate-800' : 'text-slate-400'">{{ filters.medico || 'Médico' }}</span>
+            <span class="truncate" :class="filters.medicos.length ? 'text-slate-800' : 'text-slate-400'">{{ etiquetaMulti('medico') }}</span>
             <span class="text-slate-400">⌄</span>
           </button>
           <div v-if="dropdowns.medico" class="select-search-panel">
             <input v-model="busquedasOpciones.medico" class="input h-10" placeholder="Buscar médico..." @input="buscarOpcionesDebounced('medico')" />
-            <button v-if="filters.medico" class="mt-2 text-xs font-semibold text-slate-500 hover:text-rose-600" @click="limpiarSelector('medico')">Limpiar médico</button>
+            <button v-if="filters.medicos.length" class="mt-2 text-xs font-semibold text-slate-500 hover:text-rose-600" @click="limpiarSelector('medico')">Limpiar médicos</button>
             <div class="mt-2 max-h-56 overflow-auto">
-              <button v-for="opcion in opciones.medico" :key="opcion.value" class="option-row" @click="seleccionarOpcion('medico', opcion)">{{ opcion.label }}</button>
+              <button v-for="opcion in opciones.medico" :key="opcion.value" class="option-row" @click="seleccionarOpcion('medico', opcion)">
+                <span class="flex items-center justify-between gap-2">
+                  <span>{{ opcion.label }}</span>
+                  <span v-if="opcionMultiSeleccionada('medico', opcion)" class="text-emerald-600">✓</span>
+                </span>
+              </button>
               <p v-if="!cargandoOpciones.medico && !opciones.medico.length" class="px-2 py-3 text-sm text-slate-500">Sin opciones.</p>
               <p v-if="cargandoOpciones.medico" class="px-2 py-3 text-sm text-indigo-600">Buscando...</p>
             </div>
@@ -221,14 +229,23 @@
                     <p v-if="ordenamiento.relacionado_at" class="text-xs text-slate-500">{{ formatearFecha(ordenamiento.relacionado_at) }}</p>
                   </template>
                   <template v-else-if="columna.key === 'acciones'">
-                    <button
-                      v-if="!ordenamiento.cotizacion_id && canRelacionar"
-                      class="inline-flex h-9 items-center justify-center rounded-lg border border-indigo-200 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-                      @click="abrirModalRelacion(ordenamiento)"
-                    >
-                      Relacionar
-                    </button>
-                    <span v-else class="text-xs text-slate-400">-</span>
+                    <div class="flex justify-end gap-2">
+                      <button
+                        v-if="!ordenamiento.cotizacion_id"
+                        class="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-200 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                        @click="generarCotizacion(ordenamiento)"
+                      >
+                        Generar
+                      </button>
+                      <button
+                        v-if="!ordenamiento.cotizacion_id && canRelacionar"
+                        class="inline-flex h-9 items-center justify-center rounded-lg border border-indigo-200 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                        @click="abrirModalRelacion(ordenamiento)"
+                      >
+                        Relacionar
+                      </button>
+                      <span v-if="ordenamiento.cotizacion_id" class="text-xs text-slate-400">-</span>
+                    </div>
                   </template>
                   <template v-else>
                     {{ valorColumna(ordenamiento, columna.key) }}
@@ -327,6 +344,7 @@
 definePageMeta({ middleware: ['sanctum:auth'] })
 
 const { hasPermission, hasRole } = useUserPermissions()
+const router = useRouter()
 
 const storageColumnas = 'autogestion-columnas-visibles'
 const columnas = [
@@ -350,10 +368,12 @@ const filters = reactive({
   documento: '',
   entidad_cod: '',
   entidad_nom: '',
+  entidades: [],
   fecha_desde: '',
   fecha_hasta: '',
   consultorio: '',
   medico: '',
+  medicos: [],
   id_medico: '',
   cup: '',
   procedimiento: '',
@@ -420,6 +440,10 @@ const detalleOrdenamientoItems = computed(() => {
 const params = (page = 1) => {
   const query = { page, per_page: pagination.per_page }
   Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length) query[key] = value.join(',')
+      return
+    }
     const clean = String(value || '').trim()
     if (clean) query[key] = clean
   })
@@ -461,7 +485,7 @@ const buscar = async (page = 1) => {
 
 const limpiarFiltros = () => {
   Object.keys(filters).forEach((key) => {
-    filters[key] = ''
+    filters[key] = Array.isArray(filters[key]) ? [] : ''
   })
   Object.keys(busquedasOpciones).forEach((key) => {
     busquedasOpciones[key] = ''
@@ -502,19 +526,57 @@ const buscarOpciones = async (tipo) => {
 
 const seleccionarOpcion = (tipo, opcion) => {
   if (tipo === 'entidad') {
-    filters.entidad_nom = opcion.value || ''
-    filters.entidad_cod = opcion.codigo || ''
-  } else {
-    filters[tipo] = opcion.value || ''
+    alternarMulti('entidad', opcion)
+    return
   }
+
+  if (tipo === 'medico') {
+    alternarMulti('medico', opcion)
+    return
+  }
+
+  filters[tipo] = opcion.value || ''
   busquedasOpciones[tipo] = opcion.label || opcion.value || ''
   dropdowns[tipo] = false
+}
+
+const alternarMulti = (tipo, opcion) => {
+  const key = tipo === 'entidad' ? 'entidades' : 'medicos'
+  const value = opcion.value || ''
+  if (!value) return
+
+  filters[key] = filters[key].includes(value)
+    ? filters[key].filter((item) => item !== value)
+    : [...filters[key], value]
+
+  if (tipo === 'entidad') {
+    filters.entidad_nom = ''
+    filters.entidad_cod = ''
+  } else {
+    filters.medico = ''
+  }
+}
+
+const opcionMultiSeleccionada = (tipo, opcion) => {
+  const key = tipo === 'entidad' ? 'entidades' : 'medicos'
+  return filters[key].includes(opcion.value)
+}
+
+const etiquetaMulti = (tipo) => {
+  const values = tipo === 'entidad' ? filters.entidades : filters.medicos
+  if (!values.length) return tipo === 'entidad' ? 'Entidad' : 'Médico'
+  if (values.length === 1) return values[0]
+  return `${values.length} ${tipo === 'entidad' ? 'entidades' : 'médicos'} seleccionados`
 }
 
 const limpiarSelector = (tipo) => {
   if (tipo === 'entidad') {
     filters.entidad_nom = ''
     filters.entidad_cod = ''
+    filters.entidades = []
+  } else if (tipo === 'medico') {
+    filters.medico = ''
+    filters.medicos = []
   } else {
     filters[tipo] = ''
   }
@@ -574,7 +636,37 @@ const guardarRelacion = async () => {
   mensajeRelacion.value = data.value?.message || 'Ordenamiento relacionado correctamente.'
   guardandoRelacion.value = false
   modalRelacion.value = false
-  await buscar(pagination.current_page)
+
+  const actualizado = data.value?.data
+  if (actualizado?.id) {
+    const index = ordenamientos.value.findIndex((item) => Number(item.id) === Number(actualizado.id))
+    if (index >= 0) ordenamientos.value[index] = actualizado
+    if (detalleOrdenamiento.value?.id === actualizado.id) detalleOrdenamiento.value = actualizado
+    if (ordenamientoSeleccionado.value?.id === actualizado.id) ordenamientoSeleccionado.value = actualizado
+    totales.gestionados += 1
+    totales.sin_gestionar = Math.max(0, totales.sin_gestionar - 1)
+  }
+}
+
+const generarCotizacion = (ordenamiento) => {
+  router.push({
+    name: 'gestion-cotizacion',
+    query: {
+      tipo_identificacion: 'CC',
+      numero_identificacion: ordenamiento.documento || '',
+      fecha_ordenamiento: ordenamiento.fecha || '',
+      entidad_cod: ordenamiento.entidad_cod || '',
+      entidad: ordenamiento.entidad_nom || '',
+      medico: ordenamiento.medico || '',
+      medico_id: ordenamiento.id_medico || '',
+      consultorio: ordenamiento.consultorio || '',
+      procedimiento: ordenamiento.procedimiento || '',
+      id_ordenamiento: ordenamiento.id_servinte || '',
+      codigo: ordenamiento.cup || '',
+      codigos: ordenamiento.cup || '',
+      procedimientos_formulados: ordenamiento.procedimiento || '',
+    },
+  })
 }
 
 const valorColumna = (ordenamiento, key) => ordenamiento?.[key] || '-'

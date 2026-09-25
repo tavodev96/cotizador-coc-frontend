@@ -44,6 +44,19 @@
                             <span v-if="loadingPaciente">Buscando...</span>
                             <span v-else>Buscar</span>
                         </button>
+                        <button
+                            v-if="paciente.id"
+                            type="button"
+                            class="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-[#162983] text-white hover:bg-[#0f1d5f]"
+                            title="Editar información del paciente"
+                            aria-label="Editar información del paciente"
+                            @click="abrirModalPaciente"
+                        >
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.688-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 7.125L16.875 4.5M18 14v4.75A2.25 2.25 0 0115.75 21h-10.5A2.25 2.25 0 013 18.75v-10.5A2.25 2.25 0 015.25 6H10" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -500,6 +513,64 @@
 
     </div>
 
+    <div v-if="mostrarModalPaciente" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 px-4 py-6" @click.self="cerrarModalPaciente">
+        <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-indigo-700">Paciente existente</p>
+                    <h3 class="mt-1 text-xl font-semibold text-slate-900">Actualizar datos del paciente</h3>
+                    <p class="mt-1 text-sm text-slate-500">Los cambios se reflejan inmediatamente en esta cotización.</p>
+                </div>
+                <button type="button" class="h-9 w-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" @click="cerrarModalPaciente">×</button>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Tipo de identificación</label>
+                    <input v-model="pacienteForm.tipo_identificacion" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Número de identificación</label>
+                    <input v-model="pacienteForm.numero_identificacion" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Nombres</label>
+                    <input v-model="pacienteForm.nombres" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Apellidos</label>
+                    <input v-model="pacienteForm.apellidos" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Correo</label>
+                    <input v-model="pacienteForm.correo" type="email" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Teléfono</label>
+                    <input v-model="pacienteForm.telefono" class="w-full h-11 border border-slate-300 rounded-lg px-3" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Entidad</label>
+                    <select v-model="pacienteForm.entidad_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white">
+                        <option value="">Sin entidad</option>
+                        <option v-for="entidad in entidades" :key="entidad.id" :value="Number(entidad.id)">{{ entidad.nombre }}</option>
+                    </select>
+                </div>
+            </div>
+
+            <p v-if="pacienteModalMensaje" class="mt-4 rounded-lg px-3 py-2 text-sm" :class="pacienteModalError ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'">
+                {{ pacienteModalMensaje }}
+            </p>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button type="button" class="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="cerrarModalPaciente">Cancelar</button>
+                <button type="button" class="h-10 rounded-lg bg-[#162983] px-4 text-sm font-semibold text-white hover:bg-[#0f1d5f] disabled:opacity-60" :disabled="guardandoPaciente" @click="guardarPaciente">
+                    {{ guardandoPaciente ? 'Guardando...' : 'Guardar paciente' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal selección de códigos -->
     <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div class="bg-white border border-slate-200 rounded-2xl shadow-xl p-6 w-full max-w-2xl">
@@ -634,6 +705,19 @@ const isconsultorioDisabled = ref(false);
 const isdoctorDisabled = ref(false);
 const extracting = ref(true);
 const loadingPaciente = ref(false);
+const mostrarModalPaciente = ref(false);
+const guardandoPaciente = ref(false);
+const pacienteModalMensaje = ref('');
+const pacienteModalError = ref(false);
+const pacienteForm = reactive({
+    tipo_identificacion: '',
+    numero_identificacion: '',
+    nombres: '',
+    apellidos: '',
+    correo: '',
+    telefono: '',
+    entidad_id: '',
+});
 const loadingBuscarCodigo = ref(false);
 const cotizandoLaser = ref(false);
 const cotizandoPlasticaOcular = ref(false);
@@ -1323,6 +1407,91 @@ const onLenteValorInput = (val, index) => {
     lente.valor = numero;
 }
 
+const llenarFormularioPaciente = () => {
+    pacienteForm.tipo_identificacion = paciente.value.tipo_identificacion || ''
+    pacienteForm.numero_identificacion = paciente.value.numero_identificacion || ''
+    pacienteForm.nombres = paciente.value.nombres || ''
+    pacienteForm.apellidos = paciente.value.apellidos || ''
+    pacienteForm.correo = paciente.value.correo || ''
+    pacienteForm.telefono = paciente.value.telefono || ''
+    pacienteForm.entidad_id = paciente.value.entidad_id || ''
+}
+
+const abrirModalPaciente = () => {
+    if (!paciente.value.id) return
+    llenarFormularioPaciente()
+    pacienteModalMensaje.value = ''
+    pacienteModalError.value = false
+    mostrarModalPaciente.value = true
+}
+
+const cerrarModalPaciente = () => {
+    if (guardandoPaciente.value) return
+    mostrarModalPaciente.value = false
+}
+
+const guardarPaciente = async () => {
+    pacienteModalMensaje.value = ''
+    pacienteModalError.value = false
+
+    if (!pacienteForm.tipo_identificacion || !pacienteForm.numero_identificacion || !pacienteForm.nombres || !pacienteForm.apellidos) {
+        pacienteModalError.value = true
+        pacienteModalMensaje.value = 'Completa los datos obligatorios del paciente.'
+        return
+    }
+
+    if (pacienteForm.correo && !emailRegex.test(String(pacienteForm.correo).trim())) {
+        pacienteModalError.value = true
+        pacienteModalMensaje.value = 'El correo del paciente no tiene un formato válido.'
+        return
+    }
+
+    if (pacienteForm.telefono && !telefonoRegex.test(String(pacienteForm.telefono).trim())) {
+        pacienteModalError.value = true
+        pacienteModalMensaje.value = 'El teléfono del paciente no tiene un formato válido.'
+        return
+    }
+
+    guardandoPaciente.value = true
+    const { data, error } = await useSanctumFetch(`/api/pacientes/${paciente.value.id}`, {
+        method: 'PUT',
+        body: {
+            tipo_identificacion: pacienteForm.tipo_identificacion,
+            numero_identificacion: pacienteForm.numero_identificacion,
+            nombres: pacienteForm.nombres,
+            apellidos: pacienteForm.apellidos,
+            correo: pacienteForm.correo || null,
+            telefono: pacienteForm.telefono || null,
+            entidad_id: pacienteForm.entidad_id || null,
+        },
+    })
+
+    if (error.value) {
+        pacienteModalError.value = true
+        pacienteModalMensaje.value = getApiErrorMessage(error.value, 'No fue posible actualizar el paciente.')
+        guardandoPaciente.value = false
+        return
+    }
+
+    const actualizado = data.value?.paciente || {}
+    Object.assign(paciente.value, {
+        id: actualizado.id || paciente.value.id,
+        tipo_identificacion: actualizado.tipo_identificacion || '',
+        numero_identificacion: actualizado.numero_identificacion || '',
+        nombres: actualizado.nombres || '',
+        apellidos: actualizado.apellidos || '',
+        correo: actualizado.correo || '',
+        telefono: actualizado.telefono || '',
+        entidad_id: actualizado.entidad_id || '',
+    })
+
+    const entidad = entidades.value.find((item) => Number(item.id) === Number(paciente.value.entidad_id))
+    buscadorEntidad.value = entidad?.nombre || buscadorEntidad.value
+    guardandoPaciente.value = false
+    mostrarModalPaciente.value = false
+    pushNotification('success', 'Paciente actualizado correctamente.', 'Paciente')
+}
+
 const buscarPaciente = async () => {
 
     loadingPaciente.value = true;
@@ -1344,6 +1513,8 @@ const buscarPaciente = async () => {
             paciente.value.correo = p.correo || '';
             paciente.value.telefono = p.telefono || '';
             paciente.value.entidad_id = p.entidad_id || '';
+            const entidad = entidades.value.find((item) => Number(item.id) === Number(p.entidad_id))
+            if (entidad) buscadorEntidad.value = entidad.nombre
         } else {
             pushNotification('error', 'Paciente no encontrado', 'Error');
         }

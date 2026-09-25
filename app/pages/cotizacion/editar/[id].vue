@@ -1,6 +1,13 @@
 <template>
     <div class="space-y-4">
         <div>
+            <button
+                v-if="vieneDeSeguimiento"
+                class="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                @click="volverSeguimiento"
+            >
+                ← Volver a seguimiento
+            </button>
             <h1 class="text-2xl font-semibold text-slate-900">Editar cotización</h1>
             <p class="text-sm text-slate-600 mt-1">Actualiza la información manteniendo la estructura existente.</p>
         </div>
@@ -57,6 +64,9 @@ const redirecting = ref(false)
 const auditoriaLogs = ref([])
 const loadingAuditoriaLogs = ref(false)
 
+const vieneDeSeguimiento = computed(() => route.query.return_to === 'seguimiento')
+const volverSeguimiento = () => router.push('/gestion/seguimiento')
+
 const vigenciaLogs = computed(() =>
     auditoriaLogs.value.filter(
         (log) =>
@@ -102,7 +112,10 @@ const handleSaved = async () => {
     await fetchAuditoriaLogs()
 
     setTimeout(() => {
-        router.push(`/cotizacion/imprimir/${route.params.id}`)
+        router.push({
+            path: `/cotizacion/imprimir/${route.params.id}`,
+            query: vieneDeSeguimiento.value ? { return_to: 'seguimiento' } : {},
+        })
     }, 2000)
 }
 

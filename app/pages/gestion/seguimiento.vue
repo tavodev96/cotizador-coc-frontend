@@ -214,6 +214,7 @@ const alternarOrden = (key) => {
 }
 
 const storageKeyColumnas = 'seguimiento-columnas-visibles'
+const storageKeyRetorno = 'seguimiento-retorno-estado'
 
 const cargarColumnas = () => {
   if (import.meta.server) return
@@ -404,8 +405,47 @@ const borrarFiltros = () => {
   router.replace({ path: route.path, query: {} })
 };
 
-onMounted(() => {
+const guardarRetornoSeguimiento = () => {
+  if (import.meta.server) return
+  sessionStorage.setItem(storageKeyRetorno, JSON.stringify({
+    filtros: buscadorRef.value?.getState?.() || null,
+    filtrosTabla: filtrosTabla.value,
+    columnasVisibles: columnasVisibles.value,
+    page: pagination.value.current_page,
+    timestamp: Date.now(),
+  }))
+}
+
+const linkConRetorno = (path) => ({ path, query: { return_to: 'seguimiento' } })
+
+const restaurarRetornoSeguimiento = async () => {
+  if (import.meta.server) return
+  const raw = sessionStorage.getItem(storageKeyRetorno)
+  if (!raw) return
+
+  try {
+    const saved = JSON.parse(raw)
+    if (!saved || Date.now() - Number(saved.timestamp || 0) > 1000 * 60 * 60 * 4) return
+
+    if (Array.isArray(saved.columnasVisibles) && saved.columnasVisibles.length) {
+      columnasVisibles.value = saved.columnasVisibles
+    }
+
+    filtrosTabla.value = saved.filtrosTabla || {}
+    await nextTick()
+    buscadorRef.value?.restoreState?.(saved.filtros || {})
+    await buscadorRef.value?.buscar(saved.page || 1)
+  } catch (error) {
+    console.error('No fue posible restaurar seguimiento:', error)
+  }
+}
+
+onMounted(async () => {
   cargarColumnas()
+  await nextTick()
+  setTimeout(() => {
+    restaurarRetornoSeguimiento()
+  }, 250)
 })
 
 onBeforeUnmount(() => {
@@ -587,13 +627,13 @@ onBeforeUnmount(() => {
                 <span v-else>-</span>
               </template>
               <div v-else-if="col.key === 'acciones'" class="flex items-center justify-end gap-2 whitespace-nowrap">
-                <NuxtLink :to="`/cotizacion/${c.id}`" title="Ver detalle" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-white hover:border-indigo-300">
+                <NuxtLink :to="linkConRetorno(`/cotizacion/${c.id}`)" title="Ver detalle" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-white hover:border-indigo-300" @click="guardarRetornoSeguimiento">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5c5.5 0 9 5.3 9 7s-3.5 7-9 7s-9-5.3-9-7s3.5-7 9-7m0 2c-4 0-6.8 3.8-7 5c.2 1.2 3 5 7 5s6.8-3.8 7-5c-.2-1.2-3-5-7-5m0 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5"/></svg>
                 </NuxtLink>
-                <NuxtLink :to="`/cotizacion/imprimir/${c.id}`" title="Imprimir cotización" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                <NuxtLink :to="linkConRetorno(`/cotizacion/imprimir/${c.id}`)" title="Imprimir cotización" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" @click="guardarRetornoSeguimiento">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 9V3h12v6h1a3 3 0 0 1 3 3v5h-4v4H6v-4H2v-5a3 3 0 0 1 3-3zm2 0h8V5H8zm0 10h8v-5H8zm11-4v-3a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3h1v-3h12v3z"/></svg>
                 </NuxtLink>
-                <NuxtLink :to="`/cotizacion/editar/${c.id}`" title="Editar" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-indigo-700 text-white hover:bg-indigo-800">
+                <NuxtLink :to="linkConRetorno(`/cotizacion/editar/${c.id}`)" title="Editar" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-indigo-700 text-white hover:bg-indigo-800" @click="guardarRetornoSeguimiento">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="m5 16.2l9.9-9.9l2.8 2.8L7.8 19H5zm11.3-11.3l1.1-1.1a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-1.1 1.1z"/></svg>
                 </NuxtLink>
                 <button type="button" title="Eliminar" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-rose-600 text-white hover:bg-rose-700" @click="abrirEliminar(c)">
