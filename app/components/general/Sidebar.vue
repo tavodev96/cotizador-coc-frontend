@@ -129,7 +129,7 @@ const canAccessRolesPermisosConfig = computed(() => {
 })
 
 const canAccessReportes = computed(() => {
-  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver', 'integraciones.salesforce.ver_logs']) || isAdmin.value || isSuperAdmin.value
+  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver', 'reportes.salesforce.ver']) || isAdmin.value || isSuperAdmin.value
 })
 
 const canAccessReporteCotizaciones = computed(() => {
@@ -137,6 +137,6 @@ const canAccessReporteCotizaciones = computed(() => {
 })
 
 const canAccessReporteSalesforce = computed(() => {
-  return hasPermission('reportes.cotizaciones.ver') || hasPermission('integraciones.salesforce.ver_logs') || isAdmin.value || isSuperAdmin.value
+  return hasPermission('reportes.salesforce.ver') || isAdmin.value || isSuperAdmin.value
 })
 </script>

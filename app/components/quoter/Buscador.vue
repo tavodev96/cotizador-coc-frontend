@@ -58,6 +58,7 @@ const mostrarDropdownMedicos = ref(false)
 const mostrarDropdownEntidades = ref(false)
 const mostrarDropdownAsesores = ref(false)
 const mostrarDropdownEstados = ref(false)
+const estadoRestauradoExternamente = ref(false)
 
 const loading = ref(false)
 const pagination = ref({
@@ -361,8 +362,34 @@ const buscar = async (page = 1) => {
     }
 }
 
+const getState = () => ({
+    filtros: JSON.parse(JSON.stringify(filtros.value)),
+    buscadorMedico: buscadorMedico.value,
+    buscadorEntidad: buscadorEntidad.value,
+    buscadorAsesor: buscadorAsesor.value,
+    per_page: pagination.value.per_page,
+})
+
+const restoreState = (state = {}) => {
+    estadoRestauradoExternamente.value = true
+    const nextFiltros = state.filtros || state
+    filtros.value = {
+        ...filtros.value,
+        ...nextFiltros,
+        estado_ids: Array.isArray(nextFiltros.estado_ids) ? nextFiltros.estado_ids : [],
+    }
+    if (state.per_page) {
+        pagination.value.per_page = Number(state.per_page) || pagination.value.per_page
+    }
+    buscadorMedico.value = state.buscadorMedico || medicos.value.find(item => String(item.id) === String(filtros.value.medico_id))?.nombre || ''
+    buscadorEntidad.value = state.buscadorEntidad || entidades.value.find(item => String(item.id) === String(filtros.value.entidad_id))?.nombre || ''
+    buscadorAsesor.value = state.buscadorAsesor || asesores.value.find(item => String(item.id) === String(filtros.value.asesor_id))?.nombre || asesores.value.find(item => String(item.id) === String(filtros.value.asesor_id))?.name || ''
+}
+
 defineExpose({
     buscar,
+    getState,
+    restoreState,
 })
 
 const estadosSeleccionados = computed(() => {
@@ -397,8 +424,10 @@ const buscarPendientesSinGestion = async () => {
 
 onMounted(() => {
     cargarCatalogos().then(async () => {
-        applyRouteFilters()
-        if (hasRouteFilters()) {
+        if (!estadoRestauradoExternamente.value) {
+            applyRouteFilters()
+        }
+        if (!estadoRestauradoExternamente.value && hasRouteFilters()) {
             await buscar()
         }
     })

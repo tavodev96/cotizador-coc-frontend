@@ -7,6 +7,7 @@ import { Notivue, Notification, filledIcons, push } from 'notivue'
 import { PDFDocument } from 'pdf-lib'
 
 const route = useRoute()
+const router = useRouter()
 const cotizacion = ref(null)
 const contentRef = ref(null)
 const loading = ref(true)
@@ -30,6 +31,9 @@ const tipoDocumentoLabel = computed(() => esCodificacion.value ? 'Codificación'
 const modoPaciente = computed(() => imprimirParaPaciente.value || imprimirParaPacienteDetallada.value || modoConsulta.value)
 const modoPacienteResumen = computed(() => imprimirParaPaciente.value && !imprimirParaPacienteDetallada.value)
 const modoPacienteDetallado = computed(() => !modoConsulta.value && imprimirParaPacienteDetallada.value)
+const vieneDeSeguimiento = computed(() => route.query.return_to === 'seguimiento')
+
+const volverSeguimiento = () => router.push('/gestion/seguimiento')
 
 const modoActivoLabel = computed(() => {
   if (modoConsulta.value) {
@@ -741,6 +745,14 @@ const enviarCorreo = async () => {
     </div>
   </div>
   <div v-show="!loading">
+    <div v-if="vieneDeSeguimiento" class="mx-auto mb-4 flex w-[210mm] max-w-full justify-start print:hidden">
+      <button
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        @click="volverSeguimiento"
+      >
+        ← Volver a seguimiento
+      </button>
+    </div>
     <div class="quote-print-document bg-white text-black p-5 text-sm" ref="contentRef"
       style="width: 210mm; height: auto; margin: 0 auto; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.35;">
       <section class="quote-patient-data">
