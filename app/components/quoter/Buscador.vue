@@ -471,6 +471,7 @@ watch(buscadorAsesor, (valor) => {
 })
 
 watch(() => route.query, async () => {
+    if (estadoRestauradoExternamente.value) return
     applyRouteFilters()
     if (hasRouteFilters()) {
         await buscar()

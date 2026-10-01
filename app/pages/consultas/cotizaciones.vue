@@ -394,15 +394,18 @@ const tarifasProcedimientoModal = computed(() => {
     const grupos = new Map()
 
     items.forEach((item) => {
-        const codigo = String(item.tarifa || item.codigo_tarifa || item.protartar || '').trim()
-        const nombre = String(item.nombre_tarifa || item.tarnom || '').trim()
-        const key = `${codigo}-${nombre}`
+        const codigo = String(item.tarifa_codigo || '').trim()
+        const nombre = String(item.tarifa_nombre || '').trim()
 
-        if (!codigo || grupos.has(key)) return
+        if (!codigo && !nombre) return
+
+        const key = `${codigo || 'SIN-CODIGO'}-${nombre || 'SIN-NOMBRE'}`
+
+        if (grupos.has(key)) return
 
         grupos.set(key, {
             key,
-            codigo,
+            codigo: codigo || 'Sin código',
             nombre: nombre || 'Sin nombre',
         })
     })
