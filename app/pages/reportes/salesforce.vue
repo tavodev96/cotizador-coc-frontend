@@ -13,9 +13,11 @@ const totales = ref({ total_cotizaciones: 0, enviadas: 0, con_error: 0, pendient
 const porAsesor = ref<any[]>([])
 const medicos = ref<any[]>([])
 const entidades = ref<any[]>([])
+const asesores = ref<any[]>([])
 
 const filtros = ref({
   codigo: '',
+  asesor_id: '',
   entidad_id: '',
   medico_id: '',
   date_from: '',
@@ -27,6 +29,15 @@ const paginacion = ref({ current_page: 1, last_page: 1, per_page: 25, total: 0 }
 const canRetrySalesforce = computed(() => {
   return hasPermission('integraciones.salesforce.reintento')
     || hasRole('admin')
+    || hasRole('Admin')
+    || hasRole('administrador')
+    || hasRole('Administrador')
+    || hasRole('superadmin')
+    || hasRole('Superadmin')
+})
+
+const canViewAllSalesforceReport = computed(() => {
+  return hasRole('admin')
     || hasRole('Admin')
     || hasRole('administrador')
     || hasRole('Administrador')
@@ -54,6 +65,7 @@ const cargarCatalogos = async () => {
   const { data } = await useSanctumFetch('/api/catalogos', { method: 'GET' })
   medicos.value = data.value?.medicos || []
   entidades.value = data.value?.entidades || []
+  asesores.value = data.value?.asesores || []
 }
 
 const buscar = async (page = 1) => {
@@ -84,7 +96,7 @@ const buscar = async (page = 1) => {
 }
 
 const limpiarFiltros = () => {
-  filtros.value = { codigo: '', entidad_id: '', medico_id: '', date_from: '', date_to: '' }
+  filtros.value = { codigo: '', asesor_id: '', entidad_id: '', medico_id: '', date_from: '', date_to: '' }
   buscar(1)
 }
 
@@ -130,14 +142,22 @@ onMounted(async () => {
   <div class="space-y-6 pb-10">
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
       <p class="text-sm font-semibold uppercase tracking-wide text-indigo-700">Reportes</p>
-      <h1 class="mt-1 text-3xl font-bold text-slate-900">Mi reporte Salesforce</h1>
-      <p class="mt-2 text-slate-600">Cotizaciones del usuario logueado, enviadas correctamente, con error o pendientes. No incluye codificaciones.</p>
+      <h1 class="mt-1 text-3xl font-bold text-slate-900">{{ canViewAllSalesforceReport ? 'Reporte Salesforce' : 'Mi reporte Salesforce' }}</h1>
+      <p class="mt-2 text-slate-600">
+        {{ canViewAllSalesforceReport
+          ? 'Cotizaciones de todos los asesores, enviadas correctamente, con error o pendientes. No incluye codificaciones.'
+          : 'Cotizaciones del usuario logueado, enviadas correctamente, con error o pendientes. No incluye codificaciones.' }}
+      </p>
     </section>
 
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
       <h2 class="text-lg font-bold text-slate-900 mb-4">Filtros</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
         <input v-model="filtros.codigo" class="rounded-lg border border-slate-300 px-3 py-2" placeholder="Nro. cotización" @keyup.enter="buscar(1)" />
+        <select v-if="canViewAllSalesforceReport" v-model="filtros.asesor_id" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+          <option value="">Todos los asesores</option>
+          <option v-for="asesor in asesores" :key="asesor.id" :value="asesor.id">{{ asesor.name || asesor.nombre }}</option>
+        </select>
         <select v-model="filtros.entidad_id" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
           <option value="">Todas las entidades</option>
           <option v-for="entidad in entidades" :key="entidad.id" :value="entidad.id">{{ entidad.nombre }}</option>

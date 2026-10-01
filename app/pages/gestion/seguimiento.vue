@@ -60,6 +60,7 @@ const modalEliminadas = ref(false)
 const eliminadas = ref([])
 const cargandoEliminadas = ref(false)
 const paginationEliminadas = ref({ current_page: 1, last_page: 1, per_page: 10, total: 0 })
+const estadoBusquedaPadre = ref(null)
 let filtrosTablaTimer = null
 
 const canViewEliminadas = computed(() => {
@@ -102,6 +103,9 @@ const actualizarResultados = (resultados) => {
   cotizaciones.value = resultados
   ordenTabla.value = { key: '', direction: 'asc' }
   busquedaRealizada.value = true
+  if (buscadorRef.value?.getState) {
+    estadoBusquedaPadre.value = buscadorRef.value.getState()
+  }
 }
 
 const actualizarPagination = (meta) => {
@@ -250,6 +254,9 @@ watch(filtrosTabla, () => {
   if (!busquedaRealizada.value) return
   if (filtrosTablaTimer) clearTimeout(filtrosTablaTimer)
   filtrosTablaTimer = setTimeout(() => {
+    if (estadoBusquedaPadre.value && buscadorRef.value?.restoreState) {
+      buscadorRef.value.restoreState(estadoBusquedaPadre.value)
+    }
     buscadorRef.value?.buscar(1)
   }, 450)
 }, { deep: true })
@@ -400,6 +407,7 @@ const borrarFiltros = () => {
   filtrosTabla.value = {}
   ordenTabla.value = { key: '', direction: 'asc' }
   resetBuscador.value = !resetBuscador.value
+  estadoBusquedaPadre.value = null
   busquedaRealizada.value = false
   actualizarPagination({ current_page: 1, last_page: 1, per_page: 10, total: 0 })
   router.replace({ path: route.path, query: {} })
@@ -432,6 +440,7 @@ const restaurarRetornoSeguimiento = async () => {
     }
 
     filtrosTabla.value = saved.filtrosTabla || {}
+    estadoBusquedaPadre.value = saved.filtros || null
     await nextTick()
     buscadorRef.value?.restoreState?.(saved.filtros || {})
     await buscadorRef.value?.buscar(saved.page || 1)
