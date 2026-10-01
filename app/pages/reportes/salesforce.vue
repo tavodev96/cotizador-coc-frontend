@@ -4,7 +4,7 @@ import { push } from 'notivue'
 
 definePageMeta({ middleware: ['sanctum:auth'] })
 
-const { hasPermission, hasRole } = useUserPermissions()
+const { hasPermission, hasRole, ensureUserPermissions } = useUserPermissions()
 
 const cargando = ref(false)
 const reprocesando = ref<Record<number, boolean>>({})
@@ -36,6 +36,8 @@ const canRetrySalesforce = computed(() => {
     || hasRole('Superadmin')
 })
 
+const canViewSalesforceReport = computed(() => hasPermission('reportes.salesforce.ver'))
+
 const canViewAllSalesforceReport = computed(() => {
   return hasRole('admin')
     || hasRole('Admin')
@@ -62,6 +64,8 @@ const construirQuery = (page = 1) => {
 }
 
 const cargarCatalogos = async () => {
+  if (!canViewSalesforceReport.value) return
+
   const { data } = await useSanctumFetch('/api/catalogos', { method: 'GET' })
   medicos.value = data.value?.medicos || []
   entidades.value = data.value?.entidades || []
@@ -69,6 +73,13 @@ const cargarCatalogos = async () => {
 }
 
 const buscar = async (page = 1) => {
+  if (!canViewSalesforceReport.value) {
+    cotizaciones.value = []
+    porAsesor.value = []
+    totales.value = { total_cotizaciones: 0, enviadas: 0, con_error: 0, pendientes: 0 }
+    return
+  }
+
   cargando.value = true
   try {
     const { data, error } = await useSanctumFetch('/api/reportes/salesforce-asesores', {
@@ -97,7 +108,7 @@ const buscar = async (page = 1) => {
 
 const limpiarFiltros = () => {
   filtros.value = { codigo: '', asesor_id: '', entidad_id: '', medico_id: '', date_from: '', date_to: '' }
-  buscar(1)
+  if (canViewSalesforceReport.value) buscar(1)
 }
 
 const reprocesar = async (cotizacion: any) => {
@@ -133,6 +144,10 @@ const formatDate = (date: string) => {
 const barWidth = (total: number) => chartMax.value ? `${Math.max((Number(total || 0) / chartMax.value) * 100, 6)}%` : '0%'
 
 onMounted(async () => {
+  await ensureUserPermissions()
+
+  if (!canViewSalesforceReport.value) return
+
   await cargarCatalogos()
   await buscar(1)
 })
@@ -149,6 +164,16 @@ onMounted(async () => {
           : 'Cotizaciones del usuario logueado, enviadas correctamente, con error o pendientes. No incluye codificaciones.' }}
       </p>
     </section>
+
+    <section v-if="!canViewSalesforceReport" class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+      <h2 class="text-lg font-bold">No tienes permiso para ver este reporte</h2>
+      <p class="mt-2 text-sm">
+        Para acceder al reporte Salesforce debes tener asignado el permiso
+        <span class="font-semibold">reportes.salesforce.ver</span>. Solicita la asignación desde el módulo de roles y permisos.
+      </p>
+    </section>
+
+    <template v-else>
 
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
       <h2 class="text-lg font-bold text-slate-900 mb-4">Filtros</h2>
@@ -269,5 +294,6 @@ onMounted(async () => {
         <button v-if="paginacion.current_page < paginacion.last_page" class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100" @click="buscar(paginacion.current_page + 1)">Siguiente</button>
       </div>
     </section>
+    </template>
   </div>
 </template>
