@@ -137,6 +137,6 @@ const canAccessReporteCotizaciones = computed(() => {
 })
 
 const canAccessReporteSalesforce = computed(() => {
-  return hasPermission('reportes.salesforce.ver') || isAdmin.value || isSuperAdmin.value
+  return hasPermission('reportes.salesforce.ver')
 })
 </script>
