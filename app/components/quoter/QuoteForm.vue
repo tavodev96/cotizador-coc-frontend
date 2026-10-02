@@ -163,6 +163,37 @@
                         <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white" />
                     </div>
                 </div>
+                <div v-if="isCodificacion && estadosInicialesCodificacion.length" class="mt-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-white p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wide text-indigo-700">Estado inicial de codificación</p>
+                            <p class="text-sm text-slate-600">Opcional. Si no seleccionas uno, inicia como PENDIENTE.</p>
+                        </div>
+                        <button
+                            v-if="cotizacion.estado_id"
+                            type="button"
+                            class="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                            @click="limpiarEstadoInicialCodificacion"
+                        >
+                            Limpiar
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                            v-for="estado in estadosInicialesCodificacion"
+                            :key="estado.id"
+                            type="button"
+                            class="group flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                            :class="String(cotizacion.estado_id || '') === String(estado.id)
+                                ? 'border-indigo-500 bg-indigo-600 text-white shadow-indigo-100'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'"
+                            @click="seleccionarEstadoInicialCodificacion(estado)"
+                        >
+                            <span class="font-semibold">{{ estado.nombre }}</span>
+                            <span class="h-3 w-3 rounded-full transition" :class="String(cotizacion.estado_id || '') === String(estado.id) ? 'bg-white' : 'bg-indigo-200 group-hover:bg-indigo-400'"></span>
+                        </button>
+                    </div>
+                </div>
                 <!-- :disabled="isdoctorDisabled" -->
                 <label class="block text-sm font-semibold text-slate-700 mb-1">Médico</label>
                 <div class="relative" data-dropdown="medico">
@@ -234,7 +265,7 @@
                     </div>
                 </div>
 
-                <div v-if="polizas.length" class="mt-4">
+                <div v-if="campoPolizaActivo && polizas.length" class="mt-4">
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Póliza</label>
                     <select v-model="cotizacion.poliza_id" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white">
                         <option value="" disabled>Seleccionar póliza</option>
@@ -435,68 +466,6 @@
 
                 <div v-show="!isCodificacion" class="mt-4 text-right text-xl font-bold">
                     Valor total cotización: {{ formatCurrency(totalCotizacion) }}
-                </div>
-
-                <div v-if="!isCodificacion && estadosInicialesCotizacion.length" class="mt-5 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-white p-4 shadow-sm">
-                    <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <p class="text-xs font-bold uppercase tracking-wide text-indigo-700">Estado inicial opcional</p>
-                            <h4 class="mt-1 text-base font-semibold text-slate-900">Selecciona el estado con el que iniciará la cotización</h4>
-                            <p class="mt-1 text-xs text-slate-500">Si no eliges ninguno, se guardará con el estado predeterminado PENDIENTE.</p>
-                        </div>
-                        <button
-                            v-if="cotizacion.estado_id"
-                            type="button"
-                            class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700"
-                            @click="limpiarEstadoInicial"
-                        >
-                            Limpiar
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        <button
-                            v-for="estado in estadosCotizacion"
-                            :key="estado.id"
-                            type="button"
-                            class="group flex items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                            :class="String(cotizacion.estado_id || '') === String(estado.id)
-                                ? 'border-indigo-500 bg-indigo-600 text-white shadow-indigo-100'
-                                : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50'"
-                            @click="seleccionarEstadoInicial(estado)"
-                        >
-                            <span
-                                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition"
-                                :class="String(cotizacion.estado_id || '') === String(estado.id)
-                                    ? 'border-white/50 bg-white/20 text-white'
-                                    : 'border-indigo-100 bg-indigo-50 text-indigo-700 group-hover:bg-white'"
-                            >
-                                <span class="h-2.5 w-2.5 rounded-full" :class="String(cotizacion.estado_id || '') === String(estado.id) ? 'bg-white' : 'bg-indigo-600'"></span>
-                            </span>
-                            <span class="font-semibold">{{ estado.nombre }}</span>
-                        </button>
-                    </div>
-                    <transition name="fade">
-                        <div v-if="estadoInicialEsProgramada" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                            <label class="block text-sm font-semibold text-amber-900 mb-1">Fecha programada</label>
-                            <input
-                                v-model="cotizacion.fecha_programada"
-                                type="date"
-                                class="h-11 w-full rounded-lg border border-amber-200 bg-white px-3 text-amber-950 focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                            />
-                            <p class="mt-1 text-xs text-amber-700">Obligatoria cuando el estado inicial es PROGRAMADA.</p>
-                        </div>
-                    </transition>
-                    <transition name="fade">
-                        <div v-if="estadoInicialEsRechazada" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
-                            <label class="block text-sm font-semibold text-rose-900 mb-1">Comentario del rechazo</label>
-                            <textarea
-                                v-model="cotizacion.comentario_cambio_estado"
-                                class="min-h-24 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-rose-950 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                                placeholder="Describe el motivo por el cual inicia en estado RECHAZADA"
-                            ></textarea>
-                            <p class="mt-1 text-xs text-rose-700">Obligatorio para justificar el estado inicial RECHAZADA.</p>
-                        </div>
-                    </transition>
                 </div>
 
                 <label class="block text-sm font-semibold text-slate-700 mb-1">Observaciones</label>
@@ -742,35 +711,29 @@ const medicos = ref([])
 const consultorios = ref([])
 const polizas = ref([])
 const estadosCotizacion = ref([])
+const camposFormulario = ref([])
 const tiposGestion = ['cotización', 'información', 'codificación']
 const lateralidad = ['izquierda', 'derecha', 'bilateral']
 const tiposIdentificacion = ['CC', 'CE', 'TI', 'PA']
 
-const estadosInicialesCotizacion = computed(() => estadosCotizacion.value.filter((estado) => {
+const campoPolizaActivo = computed(() => {
+    const campo = camposFormulario.value.find((item) => item.campo === 'poliza')
+    return campo ? Boolean(campo.activo) : true
+})
+
+const estadosInicialesCodificacion = computed(() => estadosCotizacion.value.filter((estado) => {
     const nombre = String(estado?.nombre || '').toUpperCase().trim()
-    return nombre !== 'ANULADA' && Number(estado?.id) !== 4
+    return ['PENDIENTE', 'APROBADA'].includes(nombre)
 }))
-const estadoInicialSeleccionado = computed(() => estadosCotizacion.value.find((estado) => String(estado.id) === String(cotizacion.value.estado_id || '')) || null)
-const estadoInicialNombre = computed(() => String(estadoInicialSeleccionado.value?.nombre || '').toUpperCase().trim())
-const estadoInicialEsProgramada = computed(() => estadoInicialNombre.value === 'PROGRAMADA' || Number(cotizacion.value.estado_id) === 5)
-const estadoInicialEsRechazada = computed(() => estadoInicialNombre.value === 'RECHAZADA' || Number(cotizacion.value.estado_id) === 6)
 
-const seleccionarEstadoInicial = (estado) => {
+const estadoInicialCodificacionSeleccionado = computed(() => estadosInicialesCodificacion.value.find((estado) => String(estado.id) === String(cotizacion.value.estado_id || '')) || null)
+
+const seleccionarEstadoInicialCodificacion = (estado) => {
     cotizacion.value.estado_id = String(estado.id)
-
-    if (Number(estado.id) !== 5) {
-        cotizacion.value.fecha_programada = ''
-    }
-
-    if (Number(estado.id) !== 6) {
-        cotizacion.value.comentario_cambio_estado = ''
-    }
 }
 
-const limpiarEstadoInicial = () => {
+const limpiarEstadoInicialCodificacion = () => {
     cotizacion.value.estado_id = ''
-    cotizacion.value.fecha_programada = ''
-    cotizacion.value.comentario_cambio_estado = ''
 }
 
 const buscadorEntidad = ref('')
@@ -1100,6 +1063,9 @@ onMounted(async () => {
             estadosCotizacion.value = data.value.data.value.estados || []
         }
 
+        const { data: camposData } = await useSanctumFetch('/api/formulario-campos/gestion_cotizacion')
+        camposFormulario.value = camposData.value?.data || []
+
         if (route.query) {
             fechaOrdenamiento.value = normalizarFechaParaApi(route.query.fecha_ordenamiento)
             idsOrdenamientoServinte.value = parseQueryValues(route.query.id_ordenamiento, ',')
@@ -1111,7 +1077,9 @@ onMounted(async () => {
             await syncEntidadFromQuery()
             syncMedicoFromQuery()
             syncConsultorioFromQuery()
-            syncPolizaFromQuery()
+            if (campoPolizaActivo.value) {
+                syncPolizaFromQuery()
+            }
 
             const codigosDesdeQuery = [
                 ...parseQueryValues(route.query.codigos, ','),
@@ -1156,6 +1124,18 @@ watch(polizaSeleccionada, (poliza) => {
     cotizacion.value.poliza = poliza || null
     cotizacion.value.valor_poliza = Number(poliza?.valor_poliza || 0)
 }, { immediate: true })
+
+watch(campoPolizaActivo, (activo) => {
+    if (activo) return
+    cotizacion.value.poliza_id = ''
+    cotizacion.value.poliza = null
+    cotizacion.value.valor_poliza = 0
+}, { immediate: true })
+
+watch(isCodificacion, (activo) => {
+    if (activo) return
+    cotizacion.value.estado_id = ''
+})
 
 const syncEntidadFromQuery = async () => {
     await nextTick()
@@ -1824,12 +1804,8 @@ const validarAntesDeGuardar = () => {
 
     if (!cotizacion.value.items?.length) return 'Debes agregar al menos un procedimiento.'
 
-    if (!isCodificacion.value && estadoInicialEsProgramada.value && !cotizacion.value.fecha_programada) {
-        return 'Debes seleccionar la fecha programada para iniciar en estado PROGRAMADA.'
-    }
-
-    if (!isCodificacion.value && estadoInicialEsRechazada.value && !String(cotizacion.value.comentario_cambio_estado || '').trim()) {
-        return 'Debes registrar un comentario para iniciar en estado RECHAZADA.'
+    if (isCodificacion.value && cotizacion.value.estado_id && !estadoInicialCodificacionSeleccionado.value) {
+        return 'El estado inicial de codificación solo puede ser PENDIENTE o APROBADA.'
     }
 
     if (!paciente.value.id) {
@@ -1873,11 +1849,9 @@ const guardarCotizacion = async () => {
             medico_id: cotizacion.value.medico_id,
             entidad_id: paciente.value.entidad_id,
             consultorio_id: cotizacion.value.consultorio_id,
-            poliza_id: cotizacion.value.poliza_id || null,
+            poliza_id: campoPolizaActivo.value ? (cotizacion.value.poliza_id || null) : null,
             observaciones: cotizacion.value.observaciones,
-            estado_id: cotizacion.value.estado_id || null,
-            fecha_programada: estadoInicialEsProgramada.value ? (cotizacion.value.fecha_programada || null) : null,
-            comentario_cambio_estado: estadoInicialEsRechazada.value ? String(cotizacion.value.comentario_cambio_estado || '').trim() : null,
+            estado_id: isCodificacion.value ? (cotizacion.value.estado_id || null) : null,
 
             // 🔹 Procedimientos
             items: cotizacion.value.items.map(item => ({
@@ -1980,7 +1954,7 @@ const guardarCotizacion = async () => {
 
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
-        cotizacion.value = { origen: '', tipo_gestion: '', estado_id: '', fecha_programada: '', comentario_cambio_estado: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
+        cotizacion.value = { origen: '', tipo_gestion: '', estado_id: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '', diasVigencia: '' };
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;

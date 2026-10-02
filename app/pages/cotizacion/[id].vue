@@ -368,8 +368,7 @@ const cambiarEstado = async () => {
   const fechaProgramadaNueva = normalizarFechaInput(fechaProgramadaTemp.value)
   const fechaRealizadaActual = normalizarFechaInput(cotizacion.value?.fecha_realizado)
   const fechaRealizadaNueva = normalizarFechaInput(fechaRealizadaTemp.value)
-  const pasaARealizado = esEstadoRealizado(nueva) && !esEstadoRealizado(estadoActual)
-  const cambiaFechaRealizada = esEstadoRealizado(nueva) && fechaRealizadaActual !== fechaRealizadaNueva
+  const saleDeRealizado = esEstadoRealizado(estadoActual) && !esEstadoRealizado(nueva)
 
   intendedEstado.value = nueva
 
@@ -393,7 +392,7 @@ const cambiarEstado = async () => {
     return
   }
 
-  if ((requiereComentarioNuevo || requiereComentarioSalida || saleDeProgramada || cambiaFechaProgramada || pasaARealizado || cambiaFechaRealizada) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
+  if ((requiereComentarioNuevo || requiereComentarioSalida || saleDeProgramada || cambiaFechaProgramada || saleDeRealizado) && (!nuevoComentario.value || !nuevoComentario.value.trim())) {
     mostrarModalComentario.value = true
     estadoSeleccionadoTemp.value = cotizacion.value?.estado_id || null
     return
@@ -696,7 +695,7 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
         <div class="flex flex-wrap items-center gap-2">
           <label for="estado" class="font-semibold">Cambiar estado:</label>
-          <select v-model="estadoSeleccionadoTemp" id="estado" class="border border-slate-300 p-2 rounded-lg w-40 bg-white" :disabled="estadoActualEsRealizado">
+          <select v-model="estadoSeleccionadoTemp" id="estado" class="border border-slate-300 p-2 rounded-lg w-40 bg-white">
             <option disabled value="" selected>Estados</option>
             <option v-for="estado in estadosAdministrativos" :value="estado.id" :key="estado.id">
               {{ estado.nombre }}
@@ -716,14 +715,10 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
             v-model="fechaRealizadaTemp"
             type="date"
             class="border border-slate-300 p-2 rounded-lg bg-white"
-            :disabled="estadoActualEsRealizado"
           />
-          <span v-if="estadoActualEsRealizado" class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-            Estado final REALIZADO. No permite nuevos cambios de estado.
-          </span>
           <button @click="cambiarEstado"
             class="flex justify-center items-center gap-2 bg-indigo-700 text-white px-4 py-2 rounded-lg"
-            :disabled="loadingEstados || estadoActualEsRealizado">
+            :disabled="loadingEstados">
             <template v-if="!loadingEstados">Actualizar</template>
             <template v-else>
               <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
