@@ -1249,6 +1249,23 @@ const pushNotification = (type, message, title) => {
     })
 }
 
+const obtenerTarifaCodigo = (item = {}) => String(
+    item.tarifa_codigo
+    || item.codigo_tarifa
+    || item.protartar
+    || item.tarifa
+    || item.tarifaId
+    || ''
+).trim()
+
+const obtenerTarifaNombre = (item = {}) => String(
+    item.tarifa_nombre
+    || item.nombre_tarifa
+    || item.tarnom
+    || item.nombreTarifa
+    || ''
+).trim()
+
 const buscarCodigo = async (codigo, index) => {
     if (!codigo) return;
 
@@ -1274,8 +1291,8 @@ const buscarCodigo = async (codigo, index) => {
                 concepto: '',
                 connom: '',
                 descuento: 0,
-                tarifa_codigo: primerResultado.protartar || primerResultado.tarifa || '',
-                tarifa_nombre: primerResultado.tarnom || primerResultado.nombre_tarifa || ''
+                tarifa_codigo: obtenerTarifaCodigo(primerResultado),
+                tarifa_nombre: obtenerTarifaNombre(primerResultado)
             });
 
             return 'single';
@@ -1292,8 +1309,8 @@ const buscarCodigo = async (codigo, index) => {
                 concepto: unico.protarcon,
                 connom: unico.connom,
                 descuento: 0,
-                tarifa_codigo: unico.protartar || unico.tarifa || '',
-                tarifa_nombre: unico.tarnom || unico.nombre_tarifa || ''
+                tarifa_codigo: obtenerTarifaCodigo(unico),
+                tarifa_nombre: obtenerTarifaNombre(unico)
             });
             return 'single';
         } else {
@@ -1301,8 +1318,8 @@ const buscarCodigo = async (codigo, index) => {
             const agrupado = data.value.reduce((acc, item) => {
                 console.log(item);
                 if (item?.id) {
-                    item.protartar = item.tarifa || 'SIN GRUPO';
-                    item.tarnom = item.nombre_tarifa || 'SIN NOMBRE';
+                    item.protartar = obtenerTarifaCodigo(item) || 'SIN GRUPO';
+                    item.tarnom = obtenerTarifaNombre(item) || 'SIN NOMBRE';
                     item.protarpro = item.codigo || 'SIN CÓDIGO';
                     item.actnom = item.nombre || 'SIN NOMBRE';
                     item.protarval = item.valor || 0;
@@ -1358,8 +1375,8 @@ const confirmarCodigo = () => {
                 concepto: codigo.protarcon,
                 connom: codigo.connom,
                 descuento: 0,
-                tarifa_codigo: codigo.protartar || codigo.tarifa || '',
-                tarifa_nombre: codigo.tarnom || codigo.nombre_tarifa || ''
+                tarifa_codigo: obtenerTarifaCodigo(codigo),
+                tarifa_nombre: obtenerTarifaNombre(codigo)
             };
 
             cotizacion.value.items.push(nuevoItem);
@@ -1377,8 +1394,8 @@ const confirmarCodigo = () => {
                 connom: "",
                 valor: 0,
                 descuento: 0,
-                tarifa_codigo: codigoSeleccionado.value[0]?.protartar || codigoSeleccionado.value[0]?.tarifa || '',
-                tarifa_nombre: codigoSeleccionado.value[0]?.tarnom || codigoSeleccionado.value[0]?.nombre_tarifa || ''
+                tarifa_codigo: obtenerTarifaCodigo(codigoSeleccionado.value[0]),
+                tarifa_nombre: obtenerTarifaNombre(codigoSeleccionado.value[0])
             });
         }
 
