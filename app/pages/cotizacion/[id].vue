@@ -23,6 +23,12 @@ const archivos = ref([])
 const historico_estados = ref([])
 const mostrarModalHistorico = ref(false)
 const mostrarModalVigencia = ref(false)
+const mostrarModalPaciente = ref(false)
+const mostrarModalAutorizacion = ref(false)
+const numeroAutorizacionEditable = ref('')
+const historialAutorizacion = ref([])
+const cargandoHistorialAutorizacion = ref(false)
+const guardandoAutorizacion = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
@@ -159,6 +165,60 @@ const pushNotification = (type, message, title) => {
     message: message,
     ariaRole: 'alert'
   })
+}
+
+const cargarHistorialAutorizacion = async () => {
+  cargandoHistorialAutorizacion.value = true
+  try {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/codificacion/autorizacion/historial`)
+    if (error.value) {
+      pushNotification('error', 'No se pudo cargar el historial de autorizaciones.', 'Error')
+      return
+    }
+    historialAutorizacion.value = data.value?.historial || []
+  } finally {
+    cargandoHistorialAutorizacion.value = false
+  }
+}
+
+const abrirModalAutorizacion = async () => {
+  numeroAutorizacionEditable.value = cotizacion.value?.codificacion?.numero_autorizacion || ''
+  mostrarModalAutorizacion.value = true
+  await cargarHistorialAutorizacion()
+}
+
+const guardarAutorizacion = async () => {
+  const numero = String(numeroAutorizacionEditable.value || '').trim()
+  if (!numero || guardandoAutorizacion.value) {
+    if (!numero) pushNotification('warning', 'Ingresa el número de autorización.', 'Validación')
+    return
+  }
+
+  guardandoAutorizacion.value = true
+  try {
+    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/codificacion/autorizacion`, {
+      method: 'PUT',
+      body: { numero_autorizacion: numero },
+    })
+
+    if (error.value) {
+      const errors = error.value?.data?.errors || {}
+      const mensaje = Object.values(errors).find((items) => Array.isArray(items) && items.length)?.[0]
+        || error.value?.data?.message
+        || 'No se pudo actualizar la autorización.'
+      pushNotification('error', mensaje, 'Error')
+      return
+    }
+
+    if (cotizacion.value?.codificacion) {
+      cotizacion.value.codificacion.numero_autorizacion = data.value?.numero_autorizacion || numero
+    }
+    historialAutorizacion.value = data.value?.historial || historialAutorizacion.value
+    numeroAutorizacionEditable.value = data.value?.numero_autorizacion || numero
+    pushNotification('success', 'Número de autorización actualizado.', 'Éxito')
+  } finally {
+    guardandoAutorizacion.value = false
+  }
 }
 
 const contieneReferenciaCuentaSalesforce = (payload) => {
@@ -604,6 +664,14 @@ const estadoActualEsRealizado = computed(() => esEstadoRealizado(cotizacion.valu
 
 const vieneDeSeguimiento = computed(() => route.query.return_to === 'seguimiento')
 const volverSeguimiento = () => router.push('/gestion/seguimiento')
+const nombrePaciente = computed(() => {
+  const paciente = cotizacion.value?.paciente || {}
+  return paciente.nombre_completo || `${paciente.nombres || ''} ${paciente.apellidos || ''}`.trim() || 'No registrado'
+})
+const direccionPaciente = computed(() => {
+  const paciente = cotizacion.value?.paciente || {}
+  return paciente.direccion || paciente.direccion_residencia || paciente.direccion_domicilio || 'No registrada'
+})
 </script>
 
 <template>
@@ -653,7 +721,8 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
       <div class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold text-slate-900"> {{ cotizacion?.tipo_gestion == 'cotización' ? 'Cotización' : 'Codificación' }} {{
           cotizacion?.codigo }}</h2>
-        <p class="text-slate-700"><span class="font-bold">Cliente:</span> {{ cotizacion?.paciente.nombre_completo }}</p>
+        <p class="text-slate-700"><span class="font-bold">Cliente:</span> {{ nombrePaciente }}</p>
+        <p class="text-slate-700"><span class="font-bold">Número de identificación:</span> <span class="font-bold">{{ cotizacion?.paciente?.numero_identificacion || 'Sin identificación' }}</span></p>
         <p class="text-slate-700"><span class="font-bold">Entidad:</span> {{ cotizacion?.entidad?.nombre || cotizacion?.paciente?.entidad?.nombre || 'N/A' }}</p>
         <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
         <p class="text-slate-700"><span class="font-bold">Salesforce:</span>
@@ -682,15 +751,27 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
           <span class="font-bold">Fecha realizada:</span>
           <span class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.fecha_realizado }}</span>
         </p>
-        <p v-if="cotizacion?.codificacion" class="text-slate-700"><span class="font-bold">Codificación:</span> <span
-            class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{
-              cotizacion?.codificacion?.numero_autorizacion }}</span></p>
+        <div v-if="cotizacion?.codificacion" class="flex flex-wrap items-center gap-2 text-slate-700">
+          <span class="font-bold">Codificación:</span>
+          <span class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.codificacion?.numero_autorizacion || 'Sin autorización' }}</span>
+        </div>
         <p v-if="mostrarChipVigencia" class="text-slate-700">
           <span class="font-bold">Vigencia:</span>
           <span class="rounded-full px-2.5 py-1 text-sm font-semibold" :class="vigenciaChipClass">
             {{ cotizacion?.vigencia?.label }}
           </span>
         </p>
+        <button type="button" class="w-fit rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100" @click="mostrarModalPaciente = true">
+          Información del paciente
+        </button>
+        <button
+          v-if="cotizacion?.codificacion"
+          type="button"
+          class="w-fit rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+          @click="abrirModalAutorizacion"
+        >
+          Gestionar autorización
+        </button>
       </div>
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
         <div class="flex flex-wrap items-center gap-2">
@@ -768,7 +849,14 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
               d="m10.6 16.2l7.05-7.05l-1.4-1.4l-5.65 5.65l-2.85-2.85l-1.4 1.4zM5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zM5 5v14z" />
           </svg>
           {{ item.codigo }} - {{ item.nombre }}
-          <span v-show="!cotizacion?.codificacion?.numero_autorizacion" class="flex  justify-center items-center gap-2">
+          <span v-if="cotizacion?.codificacion?.numero_autorizacion && item.lateralidad" class="flex items-center gap-2 text-slate-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#888888"
+                d="M12 6.5a9.77 9.77 0 0 1 8.82 5.5c-1.65 3.37-5.02 5.5-8.82 5.5S4.83 15.37 3.18 12A9.77 9.77 0 0 1 12 6.5m0-2C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5m0 5a2.5 2.5 0 0 1 0 5a2.5 2.5 0 0 1 0-5m0-2c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5s4.5-2.02 4.5-4.5s-2.02-4.5-4.5-4.5" />
+            </svg>
+            {{ item.lateralidad }}
+          </span>
+          <span v-show="!cotizacion?.codificacion?.numero_autorizacion" class="flex justify-center items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
               <path fill="#888888"
                 d="M12 6.5a9.77 9.77 0 0 1 8.82 5.5c-1.65 3.37-5.02 5.5-8.82 5.5S4.83 15.37 3.18 12A9.77 9.77 0 0 1 12 6.5m0-2C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5m0 5a2.5 2.5 0 0 1 0 5a2.5 2.5 0 0 1 0-5m0-2c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5s4.5-2.02 4.5-4.5s-2.02-4.5-4.5-4.5" />
@@ -953,9 +1041,17 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
         </div>
       </div>
     </div>
-    <div v-for="com in cotizacion?.comentarios" :key="com.id" class="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50/60">
-      <p><b>{{ com.usuario.name }} - {{ formatoFecha(com.created_at) }}</b>: {{ com.comentario }}</p>
-      <div v-if="com.adjuntos.length > 0" class="mt-2">
+    <div
+      v-for="com in cotizacion?.comentarios"
+      :key="com.id"
+      class="border rounded-xl p-3 mb-3"
+      :class="com.origen === 'medico' ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-200 bg-slate-50/60'"
+    >
+      <p>
+        <span v-if="com.origen === 'medico'" class="mr-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-semibold text-cyan-800">Consulta médica</span>
+        <b>{{ com.usuario?.name || 'Usuario no disponible' }} - {{ formatoFecha(com.created_at) }}</b>: {{ com.comentario }}
+      </p>
+      <div v-if="com.adjuntos?.length > 0" class="mt-2">
         <p>Archivos adjuntos:</p>
         <ul>
           <li v-for="adjunto in com.adjuntos" :key="adjunto.id" class=" w-fit flex justify-center items-center gap-1">
@@ -990,6 +1086,49 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
     </div>
     </section>
   </div>
+
+  <Teleport to="body">
+    <Transition name="fade">
+      <div v-if="mostrarModalAutorizacion" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4" @click.self="mostrarModalAutorizacion = false">
+        <section class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <div class="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Codificación</p>
+              <h3 class="mt-1 text-xl font-semibold text-slate-900">Número de autorización</h3>
+              <p class="mt-1 text-sm text-slate-500">El número debe ser único. Cada cambio queda registrado.</p>
+            </div>
+            <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-600 hover:bg-slate-200" aria-label="Cerrar" @click="mostrarModalAutorizacion = false">×</button>
+          </div>
+
+          <div class="mt-5">
+            <label class="block text-sm font-semibold text-slate-700" for="numero-autorizacion">Número de autorización</label>
+            <input id="numero-autorizacion" v-model="numeroAutorizacionEditable" type="text" class="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" :disabled="guardandoAutorizacion" />
+            <div class="mt-3 flex justify-end gap-2">
+              <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" :disabled="guardandoAutorizacion" @click="mostrarModalAutorizacion = false">Cancelar</button>
+              <button type="button" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60" :disabled="guardandoAutorizacion" @click="guardarAutorizacion">{{ guardandoAutorizacion ? 'Guardando...' : 'Guardar autorización' }}</button>
+            </div>
+          </div>
+
+          <div class="mt-6 border-t border-slate-200 pt-5">
+            <h4 class="font-semibold text-slate-900">Historial de autorizaciones</h4>
+            <p v-if="cargandoHistorialAutorizacion" class="mt-3 text-sm text-slate-500">Cargando historial...</p>
+            <p v-else-if="!historialAutorizacion.length" class="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Aún no hay cambios registrados.</p>
+            <ol v-else class="mt-3 space-y-3 border-l-2 border-emerald-100 pl-4">
+              <li v-for="registro in historialAutorizacion" :key="registro.id" class="relative">
+                <span class="absolute -left-[1.45rem] top-1.5 h-3 w-3 rounded-full bg-emerald-500 ring-4 ring-white"></span>
+                <p class="font-semibold text-slate-800">{{ registro.accion === 'CREATE' ? 'Autorización registrada' : 'Autorización actualizada' }}</p>
+                <p class="mt-1 text-sm text-slate-600">
+                  <template v-if="registro.anterior">De <b>{{ registro.anterior }}</b> a <b>{{ registro.numero_autorizacion }}</b></template>
+                  <template v-else><b>{{ registro.numero_autorizacion }}</b></template>
+                </p>
+                <p class="mt-1 text-xs text-slate-500">{{ registro.usuario || 'Sistema' }} · {{ formatoFecha(registro.fecha) }}</p>
+              </li>
+            </ol>
+          </div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
 
   <!-- Modal -->
   <div v-if="mostrarModalHistorico" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1050,4 +1189,34 @@ const volverSeguimiento = () => router.push('/gestion/seguimiento')
       </div>
     </div>
   </div>
+
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="mostrarModalPaciente" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4" @click.self="mostrarModalPaciente = false">
+        <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition-transform" role="dialog" aria-modal="true" aria-labelledby="titulo-informacion-paciente">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wide text-indigo-700">Paciente</p>
+              <h3 id="titulo-informacion-paciente" class="mt-1 text-xl font-bold text-slate-950">Información del paciente</h3>
+            </div>
+            <button type="button" class="h-9 w-9 rounded-full bg-slate-100 text-lg text-slate-600 transition hover:bg-slate-200" aria-label="Cerrar información del paciente" @click="mostrarModalPaciente = false">×</button>
+          </div>
+          <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+            <div class="rounded-xl bg-slate-50 p-3 sm:col-span-2"><dt class="font-semibold text-slate-500">Nombre completo</dt><dd class="mt-1 font-semibold text-slate-900">{{ nombrePaciente }}</dd></div>
+            <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Identificación</dt><dd class="mt-1 text-slate-900">{{ cotizacion?.paciente?.numero_identificacion || 'No registrada' }}</dd></div>
+            <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Teléfono</dt><dd class="mt-1 text-slate-900">{{ cotizacion?.paciente?.telefono || 'No registrado' }}</dd></div>
+            <div class="rounded-xl bg-slate-50 p-3 sm:col-span-2"><dt class="font-semibold text-slate-500">Correo electrónico</dt><dd class="mt-1 break-words text-slate-900">{{ cotizacion?.paciente?.correo || 'No registrado' }}</dd></div>
+            <div class="rounded-xl bg-slate-50 p-3 sm:col-span-2"><dt class="font-semibold text-slate-500">Dirección</dt><dd class="mt-1 text-slate-900">{{ direccionPaciente }}</dd></div>
+          </dl>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>

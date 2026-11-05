@@ -51,6 +51,7 @@ const pagination = ref({
   per_page: 10,
   total: 0,
 })
+const paginaObjetivo = ref(1)
 const modalEliminar = ref(false)
 const cotizacionAEliminar = ref(null)
 const motivoEliminacion = ref('')
@@ -115,6 +116,7 @@ const actualizarPagination = (meta) => {
     per_page: meta?.per_page || 10,
     total: meta?.total || 0,
   }
+  paginaObjetivo.value = pagination.value.current_page
 }
 
 const actualizarLoading = (estado) => {
@@ -395,6 +397,16 @@ const irPagina = async (page) => {
   await buscadorRef.value?.buscar(page)
 }
 
+const irPaginaDirecta = async () => {
+  const page = Math.min(Math.max(Number(paginaObjetivo.value) || 1, 1), pagination.value.last_page)
+  paginaObjetivo.value = page
+  await irPagina(page)
+}
+
+const cambiarTamanoPagina = async (event) => {
+  await buscadorRef.value?.setPerPage(Number(event.target.value))
+}
+
 const fechaCorta = (fechaISO) => {
   if (!fechaISO) return ''
   const match = String(fechaISO).match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -463,7 +475,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
+  <div class="w-full max-w-none px-4 py-6 md:px-6 space-y-5">
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5">
       <QuoterBuscador ref="buscadorRef" @resultados="actualizarResultados" @pagination="actualizarPagination" @loading="actualizarLoading" :reset="resetBuscador" :column-filters="filtrosTabla" />
     </div>
@@ -664,7 +676,35 @@ onBeforeUnmount(() => {
         <p class="text-sm text-slate-600">
           Página {{ pagination.current_page }} de {{ pagination.last_page }} · {{ pagination.per_page }} por página
         </p>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="flex items-center gap-2 text-sm text-slate-600">
+            Mostrar
+            <select
+              :value="pagination.per_page"
+              class="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              :disabled="cargandoBusqueda"
+              @change="cambiarTamanoPagina"
+            >
+              <option :value="10">10</option>
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
+            por página
+          </label>
+          <form class="flex items-center gap-2" @submit.prevent="irPaginaDirecta">
+            <label for="pagina-seguimiento" class="text-sm text-slate-600">Ir a</label>
+            <input
+              id="pagina-seguimiento"
+              v-model.number="paginaObjetivo"
+              type="number"
+              min="1"
+              :max="pagination.last_page"
+              class="h-9 w-16 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 disabled:opacity-50"
+              :disabled="cargandoBusqueda"
+            />
+            <button type="submit" class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50" :disabled="cargandoBusqueda">Ir</button>
+          </form>
           <button
             class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
             :disabled="pagination.current_page <= 1 || cargandoBusqueda"

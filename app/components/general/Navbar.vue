@@ -1,6 +1,9 @@
 <template>
   <header class="fixed top-0 inset-x-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur px-4 md:px-6 xl:px-8">
-    <div class="max-w-[1600px] mx-auto flex items-center justify-between py-3">
+    <div
+      class="flex items-center justify-between py-3"
+      :class="sidebarPinned ? 'max-w-[1600px] mx-auto' : 'w-full max-w-none'"
+    >
       <div class="font-bold text-indigo-900 text-xl flex items-center gap-3">
         <img
           src="/img/logo_clinica_oftalmologia.png"
@@ -83,6 +86,13 @@
 <script setup>
 const { user } = useSanctumAuth()
 const { refreshUserPermissions } = useUserPermissions()
+
+defineProps({
+  sidebarPinned: {
+    type: Boolean,
+    default: true,
+  },
+})
 
 const menuAbierto = ref(false)
 const mostrarPerfil = ref(false)

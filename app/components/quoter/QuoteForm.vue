@@ -160,7 +160,16 @@
                     </div>
                     <div v-if="isCodificacion" class="w-1/2">
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Número de autorización</label>
-                        <input v-model="codificacion.autorizacion" type="text" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white" />
+                        <input
+                            v-model="codificacion.autorizacion"
+                            type="text"
+                            class="w-full h-12 border rounded-lg px-3 bg-white"
+                            :class="autorizacionDuplicada ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300'"
+                            @input="reiniciarValidacionAutorizacion"
+                            @blur="verificarAutorizacion"
+                        />
+                        <p v-if="validandoAutorizacion" class="mt-1 text-xs text-slate-500">Verificando autorización...</p>
+                        <p v-else-if="autorizacionDuplicada" class="mt-1 text-xs font-medium text-rose-600">Esta autorización ya está registrada.</p>
                     </div>
                 </div>
                 <div v-if="isCodificacion && estadosInicialesCodificacion.length" class="mt-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-white p-4 shadow-sm">
@@ -470,8 +479,34 @@
 
                 <label class="block text-sm font-semibold text-slate-700 mb-1">Observaciones</label>
                 <textarea v-model="cotizacion.observaciones" class="w-full h-24 border border-slate-300 rounded-lg p-3 bg-white"></textarea>
+                <div v-if="isCodificacion && mode === 'create'" class="mt-4 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">Documento de la codificación</p>
+                            <p class="mt-1 text-xs text-slate-500">Opcional. Se registrará como comentario en la codificación.</p>
+                        </div>
+                        <label class="inline-flex cursor-pointer items-center rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
+                            Seleccionar archivo
+                            <input type="file" class="sr-only" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" @change="seleccionarDocumentoCodificacion" />
+                        </label>
+                    </div>
+                    <div v-if="documentoCodificacion" class="mt-3 flex items-center gap-3 rounded-lg border border-indigo-100 bg-white p-3">
+                        <img v-if="vistaPreviaDocumentoCodificacion" :src="vistaPreviaDocumentoCodificacion" alt="Vista previa del documento" class="h-14 w-14 rounded-lg object-cover" />
+                        <div v-else class="flex h-14 w-14 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H6.75a3.375 3.375 0 00-3.375 3.375v12.75a3.375 3.375 0 003.375 3.375h5.625" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18 17.25v4.5m2.25-2.25h-4.5" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-slate-800">{{ documentoCodificacion.name }}</p>
+                            <p class="text-xs text-slate-500">{{ tamanoArchivo(documentoCodificacion.size) }}</p>
+                        </div>
+                        <button type="button" class="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-rose-600" aria-label="Quitar documento" @click="limpiarDocumentoCodificacion">×</button>
+                    </div>
+                </div>
                 <div class="sticky bottom-3 z-10 md:static bg-white/95 md:bg-transparent backdrop-blur-sm md:backdrop-blur-0 border border-slate-200 md:border-0 rounded-xl md:rounded-none p-3 md:p-0 flex justify-center items-center gap-2">
-                    <button @click="guardarCotizacion" :disabled="loading"
+                    <button @click="guardarCotizacion" :disabled="loading || validandoAutorizacion || autorizacionDuplicada"
                         class="mt-0 md:mt-4 w-full md:w-auto px-5 py-2.5 bg-[#162983] text-white rounded-lg hover:bg-blue-800 shadow-sm">
 
                         <span v-if="!loading" class="inline-block ml-2 "> {{ mode == 'edit' ? 'Actualizar cotización' : 'Guardar cotización' }}</span>
@@ -543,6 +578,25 @@
         </div>
 
     </div>
+
+    <Teleport to="body">
+        <Transition name="fade">
+            <div v-if="mostrarAlertaAutorizacion" class="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/50 px-4" @click.self="mostrarAlertaAutorizacion = false">
+                <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 4.5h.008v.008H12V16.5z" />
+                        </svg>
+                    </div>
+                    <h3 class="mt-4 text-lg font-semibold text-slate-900">Autorización ya registrada</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-600">El número de autorización ingresado ya pertenece a otra codificación. Corrígelo para poder guardar.</p>
+                    <div class="mt-6 flex justify-end">
+                        <button type="button" class="rounded-lg bg-[#162983] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f1d5f]" @click="mostrarAlertaAutorizacion = false">Entendido</button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
+    </Teleport>
 
     <div v-if="mostrarModalPaciente" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 px-4 py-6" @click.self="cerrarModalPaciente">
         <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
@@ -695,7 +749,7 @@ definePageMeta({
 })
 
 const props = defineProps({
-    mode: { type: String, required: true }, // create | edit
+    mode: { type: String, default: 'create' }, // create | edit
 })
 const emit = defineEmits(['saved'])
 
@@ -754,6 +808,15 @@ const codigoSeleccionado = ref([]);
 const seleccionarTodo = ref({});
 const procedimientosFormulados = ref([])
 const loading = ref(false);
+const documentoCodificacion = ref(null)
+const vistaPreviaDocumentoCodificacion = ref('')
+const validandoAutorizacion = ref(false)
+const autorizacionDuplicada = ref(false)
+const autorizacionVerificada = ref('')
+const numeroEnVerificacion = ref('')
+let secuenciaVerificacionAutorizacion = 0
+let solicitudAutorizacionActiva = null
+const mostrarAlertaAutorizacion = ref(false)
 const isconsultorioDisabled = ref(false);
 const isdoctorDisabled = ref(false);
 const extracting = ref(true);
@@ -1106,11 +1169,98 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutsideDropdowns)
+    limpiarDocumentoCodificacion()
 })
 
 const isCodificacion = computed(() => {
     return cotizacion.value.tipo_gestion === 'codificación'
 })
+
+const limpiarDocumentoCodificacion = () => {
+    if (vistaPreviaDocumentoCodificacion.value) {
+        URL.revokeObjectURL(vistaPreviaDocumentoCodificacion.value)
+    }
+    documentoCodificacion.value = null
+    vistaPreviaDocumentoCodificacion.value = ''
+}
+
+const seleccionarDocumentoCodificacion = (event) => {
+    const archivo = event.target.files?.[0]
+    limpiarDocumentoCodificacion()
+    event.target.value = ''
+    if (!archivo) return
+
+    if (archivo.size > 2048 * 1024) {
+        pushNotification('error', 'El documento no puede superar 2 MB.', 'Archivo no válido')
+        return
+    }
+
+    documentoCodificacion.value = archivo
+    if (archivo.type.startsWith('image/')) {
+        vistaPreviaDocumentoCodificacion.value = URL.createObjectURL(archivo)
+    }
+}
+
+const tamanoArchivo = (bytes) => {
+    if (!bytes) return '0 KB'
+    return `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`
+}
+
+const reiniciarValidacionAutorizacion = () => {
+    secuenciaVerificacionAutorizacion += 1
+    autorizacionDuplicada.value = false
+    autorizacionVerificada.value = ''
+    numeroEnVerificacion.value = ''
+    validandoAutorizacion.value = false
+    solicitudAutorizacionActiva = null
+}
+
+const verificarAutorizacion = async () => {
+    if (props.mode !== 'create' || !isCodificacion.value) return true
+
+    const numero = String(codificacion.value.autorizacion || '').trim()
+    if (!numero) return false
+
+    // Reutiliza únicamente la misma consulta que todavía está en curso. Una vez
+    // resuelta, cada blur y cada guardado vuelve a consultar al servidor.
+    if (validandoAutorizacion.value && numeroEnVerificacion.value === numero && solicitudAutorizacionActiva) {
+        return solicitudAutorizacionActiva
+    }
+
+    const secuenciaActual = ++secuenciaVerificacionAutorizacion
+    numeroEnVerificacion.value = numero
+    validandoAutorizacion.value = true
+    solicitudAutorizacionActiva = (async () => {
+        try {
+        const { data, error } = await useSanctumFetch('/api/codificaciones/autorizaciones/existe', {
+            params: { numero },
+        })
+
+        // El usuario puede cambiar el número mientras responde la petición.
+        // No permitimos que una respuesta vieja actualice el estado actual.
+        if (secuenciaActual !== secuenciaVerificacionAutorizacion || String(codificacion.value.autorizacion || '').trim() !== numero) {
+            return false
+        }
+
+        if (error.value) {
+            pushNotification('error', 'No fue posible verificar la autorización. Intenta nuevamente.', 'Verificación pendiente')
+            return false
+        }
+
+        autorizacionDuplicada.value = Boolean(data.value?.exists)
+        autorizacionVerificada.value = numero
+        if (autorizacionDuplicada.value) mostrarAlertaAutorizacion.value = true
+        return !autorizacionDuplicada.value
+        } finally {
+            if (secuenciaActual === secuenciaVerificacionAutorizacion) {
+                validandoAutorizacion.value = false
+                solicitudAutorizacionActiva = null
+            }
+        }
+    })()
+
+    return solicitudAutorizacionActiva
+}
 
 const fechaMinimaVigencia = computed(() => new Date().toISOString().split('T')[0])
 
@@ -1134,6 +1284,8 @@ watch(campoPolizaActivo, (activo) => {
 
 watch(isCodificacion, (activo) => {
     if (activo) return
+    limpiarDocumentoCodificacion()
+    reiniciarValidacionAutorizacion()
     cotizacion.value.estado_id = ''
 })
 
@@ -1842,10 +1994,39 @@ const validarAntesDeGuardar = () => {
 
     if (isCodificacion.value) {
         if (!codificacion.value.autorizacion) return 'El número de autorización es obligatorio para codificación.'
+        if (props.mode === 'create' && autorizacionDuplicada.value) return 'El número de autorización ya está registrado.'
         if (!codificacion.value.fechaVigencia) return 'La fecha de vigencia es obligatoria para codificación.'
     }
 
     return null
+}
+
+const agregarFormData = (formData, valor, clave = '') => {
+    if (valor === null || valor === undefined) {
+        formData.append(clave, '')
+        return
+    }
+
+    if (Array.isArray(valor)) {
+        valor.forEach((item, indice) => agregarFormData(formData, item, `${clave}[${indice}]`))
+        return
+    }
+
+    if (typeof valor === 'object' && !(valor instanceof File)) {
+        Object.entries(valor).forEach(([campo, item]) => {
+            agregarFormData(formData, item, clave ? `${clave}[${campo}]` : campo)
+        })
+        return
+    }
+
+    formData.append(clave, valor instanceof File ? valor : String(valor))
+}
+
+const crearPayloadConDocumento = (payload) => {
+    const formData = new FormData()
+    agregarFormData(formData, payload)
+    formData.append('documento_codificacion', documentoCodificacion.value)
+    return formData
 }
 
 const guardarCotizacion = async () => {
@@ -1854,6 +2035,11 @@ const guardarCotizacion = async () => {
     if (errorValidacion) {
         pushNotification('error', errorValidacion, 'Validación')
         return
+    }
+
+    if (props.mode === 'create' && isCodificacion.value) {
+        const autorizacionDisponible = await verificarAutorizacion()
+        if (!autorizacionDisponible) return
     }
 
     loading.value = true;
@@ -1945,7 +2131,7 @@ const guardarCotizacion = async () => {
         if (props.mode === 'edit') {
             result = await update(route.params.id, payload)
         } else {
-            result = await create(payload)
+            result = await create(documentoCodificacion.value ? crearPayloadConDocumento(payload) : payload)
         }
 
         const apiError = result?.error?.value
@@ -1973,6 +2159,8 @@ const guardarCotizacion = async () => {
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
         cotizacion.value = { origen: '', tipo_gestion: '', estado_id: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '', diasVigencia: '' };
+        limpiarDocumentoCodificacion()
+        reiniciarValidacionAutorizacion()
         cotizandoLaser.value = false;
         cotizandoPlasticaOcular.value = false;
 

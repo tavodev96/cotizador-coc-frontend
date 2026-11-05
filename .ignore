@@ -1,0 +1,25 @@
+# OpenCode / ripgrep ignore rules
+# Keep generated, dependency, and local-only files out of search results.
+
+node_modules/
+.nuxt/
+.output/
+.data/
+.nitro/
+.cache/
+dist/
+coverage/
+.eslintcache
+
+logs/
+*.log
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.idea/
+.vscode/
+.fleet/
+nuxt.config.ts.save

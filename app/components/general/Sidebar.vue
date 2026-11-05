@@ -17,7 +17,8 @@
     <!-- Consultas - Visible si puede ver cotizaciones -->
     <div v-if="canAccessConsultas" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Consultas</p>
-      <SidebarLink label="Cotizaciones" link="/consultas/cotizaciones" />
+      <SidebarLink v-if="canAccessCotizacionesConsulta" label="Cotizaciones" link="/consultas/cotizaciones" />
+      <SidebarLink v-if="canAccessConsultasMedicas" label="Cotizaciones por médico" link="/consultas/medicos" />
     </div>
 
     <!-- Cirugía - Visible según permisos de programación/cirugía -->
@@ -50,6 +51,7 @@
       <SidebarLink v-if="hasPermission('configuracion.correo.ver') || isSuperAdmin" label="Correo" link="/configuracion/correo" />
       <SidebarLink v-if="hasPermission('configuracion.maestros.ver') || isSuperAdmin" label="Maestros" link="/configuracion/maestros" />
       <SidebarLink v-if="canAccessFormularioCampos" label="Campos de formulario" link="/configuracion/formulario-campos" />
+      <SidebarLink v-if="canAccessPowerBi" label="Integración Power BI" link="/configuracion/power-bi" />
       <SidebarLink v-if="hasPermission('configuracion.errores.ver') || isSuperAdmin" label="Errores del sistema" link="/configuracion/errores-sistema" />
       <SidebarLink v-if="isSuperAdmin" label="Sincronización Informix" link="/configuracion/sincronizacion" />
       <SidebarLink v-if="hasPermission('integraciones.salesforce.ver_logs') || isSuperAdmin" label="Integración Salesforce" link="/configuracion/integraciones-salesforce" />
@@ -96,7 +98,15 @@ const canAccessAutogestion = computed(() => {
 })
 
 const canAccessConsultas = computed(() => {
+  return canAccessCotizacionesConsulta.value || canAccessConsultasMedicas.value
+})
+
+const canAccessCotizacionesConsulta = computed(() => {
   return hasAnyPermission(['cotizar.ver', 'consultas.cotizaciones.ver']) || hasRole('cajero') || hasRole('Cajero') || isAdmin.value || isSuperAdmin.value
+})
+
+const canAccessConsultasMedicas = computed(() => {
+  return hasPermission('consultas.medicos.ver') || isAdmin.value || isSuperAdmin.value
 })
 
 // Verificar si puede acceder a tarifas
@@ -118,11 +128,15 @@ const canAccessCirugia = computed(() => {
 })
 
 const canAccessConfiguracion = computed(() => {
-  return isConfigAdmin.value || hasAnyPermission(['configuracion.errores.ver', 'configuracion.correo.ver', 'configuracion.modulos', 'configuracion.permisos'])
+  return isConfigAdmin.value || hasAnyPermission(['configuracion.errores.ver', 'configuracion.correo.ver', 'configuracion.modulos', 'configuracion.permisos', 'reportes.cotizaciones.exportar'])
 })
 
 const canAccessFormularioCampos = computed(() => {
   return isSuperAdmin.value || isAdmin.value
+})
+
+const canAccessPowerBi = computed(() => {
+  return hasPermission('reportes.cotizaciones.exportar') || isAdmin.value || isSuperAdmin.value
 })
 
 const canAccessUsuariosConfig = computed(() => {
