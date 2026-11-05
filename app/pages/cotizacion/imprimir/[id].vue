@@ -299,39 +299,23 @@ const totalMostrado = computed(() => {
   return totalBaseCodificacion.value
 })
 
-const fechaHoraCreacion = computed(() => {
-  const value = cotizacion.value?.created_at
-  if (!value) return 'Fecha no disponible'
-
-  const fecha = new Date(value)
-  if (Number.isNaN(fecha.getTime())) return String(value)
-
-  return new Intl.DateTimeFormat('es-CO', {
-    timeZone: 'America/Bogota',
-    dateStyle: 'long',
-    timeStyle: 'short'
-  }).format(fecha)
-})
-
 const formatDate = (value) => {
   if (!value) return 'N/A'
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/)
-  if (match) {
-    return `${match[3]}/${match[2]}/${match[1]}`
-  }
-
-  const fecha = new Date(value)
+  const isoDate = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/)
+  const fecha = isoDate ? new Date(`${isoDate[1]}-${isoDate[2]}-${isoDate[3]}T12:00:00`) : new Date(value)
   if (Number.isNaN(fecha.getTime())) return 'N/A'
 
   return new Intl.DateTimeFormat('es-CO', {
     timeZone: 'America/Bogota',
-    day: '2-digit',
-    month: '2-digit',
+    day: 'numeric',
+    month: 'long',
     year: 'numeric'
   }).format(fecha)
 }
 
+const fechaCreacionDocumento = computed(() => formatDate(cotizacion.value?.created_at))
 const fechaAutorizacion = computed(() => formatDate(cotizacion.value?.codificacion?.fecha_autorizacion))
+const fechaVigenciaDocumento = computed(() => formatDate(cotizacion.value?.fecha_vigencia || cotizacion.value?.codificacion?.fecha_vigencia))
 const fechaVigenciaCodificacion = computed(() => formatDate(cotizacion.value?.codificacion?.fecha_vigencia))
 
 // Agrupar procedimientos por concepto y calcular totales
@@ -780,8 +764,12 @@ const enviarCorreo = async () => {
             <span>{{ cotizacion?.codigo || 'N/A' }}</span>
           </div>
           <div class="quote-info-row">
-            <strong>Fecha de Creación:</strong>
-            <span>{{ fechaHoraCreacion }}</span>
+            <strong>Fecha de creación:</strong>
+            <span>{{ fechaCreacionDocumento }}</span>
+          </div>
+          <div class="quote-info-row">
+            <strong>Fecha de vigencia:</strong>
+            <span>{{ fechaVigenciaDocumento }}</span>
           </div>
           <div class="quote-info-row">
             <strong>Médico:</strong>

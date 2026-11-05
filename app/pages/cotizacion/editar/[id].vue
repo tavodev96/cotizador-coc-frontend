@@ -8,7 +8,12 @@
             >
                 ← Volver a seguimiento
             </button>
-            <h1 class="text-2xl font-semibold text-slate-900">Editar cotización</h1>
+            <div class="flex flex-wrap items-center gap-3">
+                <h1 class="text-2xl font-semibold text-slate-900">Editar cotización</h1>
+                <span v-if="documentoActual?.codigo" class="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-800">
+                    {{ documentoActual.tipo_gestion === 'codificación' ? 'Codificación' : 'Cotización' }}: {{ documentoActual.codigo }}
+                </span>
+            </div>
             <p class="text-sm text-slate-600 mt-1">Actualiza la información manteniendo la estructura existente.</p>
         </div>
         <div class="grid gap-4 md:grid-cols-2">
@@ -20,7 +25,7 @@
                         <ul class="space-y-3">
                             <li v-for="(log, index) in vigenciaLogs" :key="index" class="rounded-lg border border-slate-200 p-3 bg-white">
                                 <div class="text-xs text-slate-500">{{ log.fecha }} · {{ log.usuario }}</div>
-                                <div class="text-sm text-slate-700 mt-1">{{ log.descripcion }}</div>
+                                <div class="text-sm text-slate-700 mt-1">{{ describirCambioVigencia(log) }}</div>
                             </li>
                         </ul>
                     </template>
@@ -63,6 +68,7 @@ const loading = ref(true)
 const redirecting = ref(false)
 const auditoriaLogs = ref([])
 const loadingAuditoriaLogs = ref(false)
+const documentoActual = ref(null)
 
 const vieneDeSeguimiento = computed(() => route.query.return_to === 'seguimiento')
 const volverSeguimiento = () => router.push('/gestion/seguimiento')
@@ -77,6 +83,28 @@ const vigenciaLogs = computed(() =>
 )
 
 const normalizarFecha = (value) => String(value || '').slice(0, 10)
+
+const formatearFechaNatural = (value) => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (!match) return ''
+
+    return new Intl.DateTimeFormat('es-CO', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00`))
+}
+
+const describirCambioVigencia = (log) => {
+    const anterior = formatearFechaNatural(log?.valor_anterior)
+    const nueva = formatearFechaNatural(log?.valor_nuevo)
+
+    if (anterior && nueva) return `La fecha de vigencia cambió del ${anterior} al ${nueva}.`
+    if (nueva) return `Se estableció la fecha de vigencia para el ${nueva}.`
+    if (anterior) return `Se eliminó la fecha de vigencia que estaba programada para el ${anterior}.`
+
+    return 'Se actualizó la fecha de vigencia.'
+}
 
 const calcularDiasVigencia = (fechaAutorizacion, fechaVigencia) => {
     const inicio = normalizarFecha(fechaAutorizacion)
@@ -131,6 +159,7 @@ onMounted(async () => {
 
     const c = data.value
     console.log('Cotización cargada para edición:', c)
+    documentoActual.value = c.cotizacion
 
     paciente.value = {
         id: c.cotizacion.paciente.id,

@@ -4,7 +4,7 @@
       <h1 class="text-2xl font-semibold text-slate-900">Nueva cotización</h1>
       <p class="text-sm text-slate-600 mt-1">Completa la información para registrar una nueva gestión.</p>
     </div>
-    <QuoterQuoteForm />
+    <QuoterQuoteForm mode="create" />
   </div>
 </template>
 <script setup>

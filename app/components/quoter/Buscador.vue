@@ -19,11 +19,13 @@ const filtros = ref({
     codigo: '',
     documento: '',
     tipo_gestion: '',
+    tipos_gestion: [],
     vigencia_estado: '',
     fecha_inicio: '',
     fecha_fin: '',
     medico_id: '',
     entidad_id: '',
+    entidad_ids: [],
     asesor_id: '',
     estado_ids: [],
     estado_gestion_id: ''
@@ -58,6 +60,7 @@ const mostrarDropdownMedicos = ref(false)
 const mostrarDropdownEntidades = ref(false)
 const mostrarDropdownAsesores = ref(false)
 const mostrarDropdownEstados = ref(false)
+const mostrarModalPendientes = ref(false)
 const estadoRestauradoExternamente = ref(false)
 
 const loading = ref(false)
@@ -137,11 +140,19 @@ const applyRouteFilters = () => {
     filtros.value.codigo = maybeString(query.codigo)
     filtros.value.documento = maybeString(query.documento)
     filtros.value.tipo_gestion = maybeString(query.tipo_gestion)
+    const tiposGestionQuery = maybeString(query.tipos_gestion)
+    filtros.value.tipos_gestion = tiposGestionQuery
+        ? tiposGestionQuery.split(',').map(item => item.trim()).filter(Boolean)
+        : []
     filtros.value.vigencia_estado = maybeString(query.vigencia_estado)
     filtros.value.fecha_inicio = maybeString(query.fecha_inicio)
     filtros.value.fecha_fin = maybeString(query.fecha_fin)
     filtros.value.medico_id = maybeString(query.medico_id)
     filtros.value.entidad_id = maybeString(query.entidad_id)
+    const entidadIdsQuery = maybeString(query.entidad_ids)
+    filtros.value.entidad_ids = entidadIdsQuery
+        ? entidadIdsQuery.split(',').map(item => item.trim()).filter(Boolean)
+        : (filtros.value.entidad_id ? [filtros.value.entidad_id] : [])
     filtros.value.asesor_id = maybeString(query.asesor_id)
     const estadoIdsQuery = maybeString(query.estado_ids)
     filtros.value.estado_ids = estadoIdsQuery
@@ -152,8 +163,7 @@ const applyRouteFilters = () => {
     const medicoSeleccionado = medicos.value.find(item => String(item.id) === filtros.value.medico_id)
     buscadorMedico.value = medicoSeleccionado?.nombre || ''
 
-    const entidadSeleccionada = entidades.value.find(item => String(item.id) === filtros.value.entidad_id)
-    buscadorEntidad.value = entidadSeleccionada?.nombre || ''
+    buscadorEntidad.value = ''
 
     const asesorSeleccionado = asesores.value.find(item => String(item.id) === filtros.value.asesor_id)
     buscadorAsesor.value = asesorSeleccionado?.nombre || asesorSeleccionado?.name || ''
@@ -164,11 +174,13 @@ const hasRouteFilters = () => {
         'codigo',
         'documento',
         'tipo_gestion',
+        'tipos_gestion',
         'vigencia_estado',
         'fecha_inicio',
         'fecha_fin',
         'medico_id',
         'entidad_id',
+        'entidad_ids',
         'asesor_id',
         'estado_id',
         'estado_ids',
@@ -189,6 +201,12 @@ const estadoIdsSeleccionadosParam = () => {
     })
     return Array.from(ids).join(',')
 }
+
+const entidadIdsSeleccionadosParam = () => (filtros.value.entidad_ids || [])
+    .map(id => String(id).trim())
+    .filter(Boolean)
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+    .join(',')
 
 const columnFiltersParam = () => {
     const activos = Object.entries(props.columnFilters || {}).reduce((acc, [key, value]) => {
@@ -213,17 +231,29 @@ const limpiarMedico = () => {
     mostrarDropdownMedicos.value = false
 }
 
-const seleccionarEntidad = (entidad) => {
-    console.log('Entidad seleccionada:', entidad.id, entidad)
-    filtros.value.entidad_id = entidad.id
-    buscadorEntidad.value = entidad.nombre
-    mostrarDropdownEntidades.value = false
+const alternarEntidad = (entidadId) => {
+    const id = String(entidadId)
+    const actuales = new Set((filtros.value.entidad_ids || []).map(item => String(item)))
+
+    if (actuales.has(id)) {
+        actuales.delete(id)
+    } else {
+        actuales.add(id)
+    }
+
+    filtros.value.entidad_ids = Array.from(actuales)
+    filtros.value.entidad_id = ''
 }
 
-const limpiarEntidad = () => {
+const limpiarEntidades = () => {
+    filtros.value.entidad_ids = []
     filtros.value.entidad_id = ''
     buscadorEntidad.value = ''
     mostrarDropdownEntidades.value = false
+}
+
+const entidadSeleccionada = (entidadId) => {
+    return (filtros.value.entidad_ids || []).map(item => String(item)).includes(String(entidadId))
 }
 
 const seleccionarAsesor = (asesor) => {
@@ -254,7 +284,7 @@ const seleccionarPrimeraCoincidencia = (tipo) => {
     }
 
     if (tipo === 'entidad' && entidadesFiltradas.value.length === 1) {
-        seleccionarEntidad(entidadesFiltradas.value[0])
+        alternarEntidad(entidadesFiltradas.value[0].id)
         return
     }
 
@@ -324,9 +354,10 @@ const buscar = async (page = 1) => {
                 fecha_inicio: filtros.value.fecha_inicio,
                 fecha_fin: filtros.value.fecha_fin,
                 tipo_gestion: filtros.value.tipo_gestion,
+                tipos_gestion: filtros.value.tipos_gestion?.join(',') || undefined,
                 vigencia_estado: filtros.value.vigencia_estado,
                 medico_id: filtros.value.medico_id,
-                entidad_id: filtros.value.entidad_id,
+                entidad_ids: entidadIdsSeleccionadosParam() || undefined,
                 asesor_id: filtros.value.asesor_id,
                 estado_ids: estadoIdsSeleccionadosParam() || undefined,
                 estado_gestion_id: filtros.value.estado_gestion_id,
@@ -362,6 +393,13 @@ const buscar = async (page = 1) => {
     }
 }
 
+const setPerPage = async (perPage) => {
+    const nextPerPage = Number(perPage)
+    if (![10, 25, 50, 100].includes(nextPerPage)) return
+    pagination.value.per_page = nextPerPage
+    await buscar(1)
+}
+
 const getState = () => ({
     filtros: JSON.parse(JSON.stringify(filtros.value)),
     buscadorMedico: buscadorMedico.value,
@@ -377,17 +415,22 @@ const restoreState = (state = {}) => {
         ...filtros.value,
         ...nextFiltros,
         estado_ids: Array.isArray(nextFiltros.estado_ids) ? nextFiltros.estado_ids : [],
+        tipos_gestion: Array.isArray(nextFiltros.tipos_gestion) ? nextFiltros.tipos_gestion : [],
+        entidad_ids: Array.isArray(nextFiltros.entidad_ids)
+            ? nextFiltros.entidad_ids
+            : (nextFiltros.entidad_id ? [nextFiltros.entidad_id] : []),
     }
     if (state.per_page) {
         pagination.value.per_page = Number(state.per_page) || pagination.value.per_page
     }
     buscadorMedico.value = state.buscadorMedico || medicos.value.find(item => String(item.id) === String(filtros.value.medico_id))?.nombre || ''
-    buscadorEntidad.value = state.buscadorEntidad || entidades.value.find(item => String(item.id) === String(filtros.value.entidad_id))?.nombre || ''
+    buscadorEntidad.value = ''
     buscadorAsesor.value = state.buscadorAsesor || asesores.value.find(item => String(item.id) === String(filtros.value.asesor_id))?.nombre || asesores.value.find(item => String(item.id) === String(filtros.value.asesor_id))?.name || ''
 }
 
 defineExpose({
     buscar,
+    setPerPage,
     getState,
     restoreState,
 })
@@ -397,21 +440,32 @@ const estadosSeleccionados = computed(() => {
     return estadosFiltrados.value.filter(estado => seleccionados.has(String(estado.id)))
 })
 
+const entidadesSeleccionadas = computed(() => {
+    const seleccionadas = new Set((filtros.value.entidad_ids || []).map(id => String(id)))
+    return entidades.value.filter(entidad => seleccionadas.has(String(entidad.id)))
+})
+
 const etiquetaEstadosSeleccionados = computed(() => {
     if (!estadosSeleccionados.value.length) return 'Estado de cotización'
     if (estadosSeleccionados.value.length === 1) return estadosSeleccionados.value[0]?.nombre || '1 estado seleccionado'
     return `${estadosSeleccionados.value.length} estados seleccionados`
 })
 
-const buscarPendientesSinGestion = async () => {
+const abrirPendientesSinGestion = () => {
+    mostrarModalPendientes.value = true
+}
+
+const buscarPendientesSinGestion = async (tipo) => {
     filtros.value.codigo = ''
     filtros.value.documento = ''
-    filtros.value.tipo_gestion = ''
+    filtros.value.tipo_gestion = tipo === 'ambos' ? '' : tipo
+    filtros.value.tipos_gestion = tipo === 'ambos' ? ['cotización', 'codificación'] : []
     filtros.value.vigencia_estado = ''
     filtros.value.fecha_inicio = ''
     filtros.value.fecha_fin = ''
     filtros.value.medico_id = ''
     filtros.value.entidad_id = ''
+    filtros.value.entidad_ids = []
     filtros.value.asesor_id = ''
     filtros.value.estado_ids = ['1']
     filtros.value.estado_gestion_id = 'sin_gestion'
@@ -419,6 +473,7 @@ const buscarPendientesSinGestion = async () => {
     buscadorEntidad.value = ''
     buscadorAsesor.value = ''
     cerrarDropdowns()
+    mostrarModalPendientes.value = false
     await buscar(1)
 }
 
@@ -442,11 +497,13 @@ watch(() => props.reset, () => {
     filtros.value.codigo = ''
     filtros.value.documento = ''
     filtros.value.tipo_gestion = ''
+    filtros.value.tipos_gestion = []
     filtros.value.vigencia_estado = ''
     filtros.value.fecha_inicio = ''
     filtros.value.fecha_fin = ''
     filtros.value.medico_id = ''
     filtros.value.entidad_id = ''
+    filtros.value.entidad_ids = []
     filtros.value.asesor_id = ''
     filtros.value.estado_ids = []
     filtros.value.estado_gestion_id = ''
@@ -484,7 +541,7 @@ watch(() => route.query, async () => {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <input v-model="filtros.codigo" placeholder="Código" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" />
         <input v-model="filtros.documento" placeholder="Documento" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white" />
-        <select v-model="filtros.tipo_gestion" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700">
+        <select v-model="filtros.tipo_gestion" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white text-slate-700" @change="filtros.tipos_gestion = []">
             <option value="" selected disabled>Tipo de gestión</option>
             <option value="cotización">Cotización</option>
             <option value="información">Información</option>
@@ -518,22 +575,43 @@ watch(() => route.query, async () => {
             </div>
         </div>
 
-        <!-- Select buscable para entidades -->
+        <!-- Selector múltiple de entidades -->
         <div class="relative w-full" data-dropdown="entidad">
-            <div class="relative">
-                <input v-model="buscadorEntidad" placeholder="Entidad" class="w-full h-11 border border-slate-300 rounded-lg px-3 pr-8 bg-white"
-                    @focus="mostrarDropdownEntidades = true" @keydown.enter.prevent="seleccionarPrimeraCoincidencia('entidad')" @keydown.esc="mostrarDropdownEntidades = false" />
-                <button v-if="filtros.entidad_id" @click="limpiarEntidad"
-                    class="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600">
-                    ✕
-                </button>
-            </div>
-            <div v-if="mostrarDropdownEntidades && entidadesFiltradas.length > 0"
-                class="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-20 shadow-sm"
-                @mousedown.prevent>
-                <div v-for="entidad in entidadesFiltradas" :key="entidad.id" @mousedown.prevent="seleccionarEntidad(entidad)"
-                    class="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm text-slate-700">
-                    {{ entidad.nombre }}
+            <button
+                type="button"
+                class="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 transition hover:border-indigo-300 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                :class="mostrarDropdownEntidades ? 'border-indigo-500 ring-2 ring-indigo-100' : ''"
+                @click="mostrarDropdownEntidades = !mostrarDropdownEntidades"
+            >
+                <span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                    <span v-if="!entidadesSeleccionadas.length" class="text-slate-500">Entidad</span>
+                    <template v-else>
+                        <span v-for="entidad in entidadesSeleccionadas.slice(0, 2)" :key="entidad.id" class="max-w-[9rem] truncate rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                            {{ entidad.nombre }}
+                        </span>
+                        <span v-if="entidadesSeleccionadas.length > 2" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">+{{ entidadesSeleccionadas.length - 2 }}</span>
+                    </template>
+                </span>
+                <span class="flex items-center gap-2">
+                    <span v-if="entidadesSeleccionadas.length" class="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white">{{ entidadesSeleccionadas.length }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition" :class="mostrarDropdownEntidades ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06" clip-rule="evenodd" /></svg>
+                </span>
+            </button>
+            <div v-if="mostrarDropdownEntidades" class="absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl" @mousedown.prevent>
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Entidades</p>
+                    <button v-if="entidadesSeleccionadas.length" type="button" class="text-xs font-semibold text-indigo-700 hover:text-indigo-900" @mousedown.prevent="limpiarEntidades">Limpiar</button>
+                </div>
+                <div class="border-b border-slate-100 p-2">
+                    <input v-model="buscadorEntidad" type="search" placeholder="Buscar entidad" class="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm" @keydown.esc="mostrarDropdownEntidades = false" />
+                </div>
+                <div class="max-h-52 overflow-y-auto py-1">
+                    <button v-for="entidad in entidadesFiltradas" :key="entidad.id" type="button" class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-indigo-50" :class="entidadSeleccionada(entidad.id) ? 'bg-indigo-50 text-indigo-800' : ''" @mousedown.prevent="alternarEntidad(entidad.id)">
+                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition" :class="entidadSeleccionada(entidad.id) ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-transparent'">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.31a1 1 0 0 1-1.42 0l-3.25-3.28a1 1 0 0 1 1.42-1.408l2.54 2.563l6.54-6.593a1 1 0 0 1 1.414-.006" clip-rule="evenodd" /></svg>
+                        </span>
+                        <span class="font-medium">{{ entidad.nombre }}</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -638,12 +716,34 @@ watch(() => route.query, async () => {
         </div>
 
         <div class="flex flex-wrap justify-end gap-2">
-            <button @click="buscarPendientesSinGestion" class="inline-flex items-center justify-center h-11 px-4 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
+            <button @click="abrirPendientesSinGestion" class="inline-flex items-center justify-center h-11 px-4 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
                 Pendientes sin gestión
             </button>
             <button @click="buscar" class="inline-flex items-center justify-center h-11 px-6 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed" :disabled="loading">
                 {{ loading ? 'Buscando...' : 'Buscar' }}
             </button>
         </div>
+
+        <Teleport to="body">
+            <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
+                <div v-if="mostrarModalPendientes" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4" @click.self="mostrarModalPendientes = false">
+                    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="titulo-pendientes">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Seguimiento</p>
+                                <h2 id="titulo-pendientes" class="mt-1 text-xl font-bold text-slate-950">Pendientes sin gestión</h2>
+                                <p class="mt-2 text-sm text-slate-600">Elige los tipos de gestión que deseas consultar.</p>
+                            </div>
+                            <button type="button" class="h-9 w-9 rounded-full bg-slate-100 text-lg text-slate-600 hover:bg-slate-200" aria-label="Cerrar" @click="mostrarModalPendientes = false">×</button>
+                        </div>
+                        <div class="mt-5 grid gap-2">
+                            <button type="button" class="rounded-xl border border-slate-200 px-4 py-3 text-left font-semibold text-slate-800 transition hover:border-indigo-300 hover:bg-indigo-50" @click="buscarPendientesSinGestion('cotización')">Cotización</button>
+                            <button type="button" class="rounded-xl border border-slate-200 px-4 py-3 text-left font-semibold text-slate-800 transition hover:border-indigo-300 hover:bg-indigo-50" @click="buscarPendientesSinGestion('codificación')">Codificación</button>
+                            <button type="button" class="rounded-xl border border-indigo-600 bg-indigo-700 px-4 py-3 text-left font-semibold text-white transition hover:bg-indigo-800" @click="buscarPendientesSinGestion('ambos')">Ambos</button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </div>
 </template>

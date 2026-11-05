@@ -155,8 +155,11 @@ watch(sidebarPinned, (value) => {
       </p>
     </div>
 
-    <GeneralNavbar />
-    <div class="flex flex-col lg:flex-row gap-6 pt-24 px-4 md:px-6 xl:px-8 pb-6 max-w-[1600px] mx-auto">
+    <GeneralNavbar :sidebar-pinned="sidebarPinned" />
+    <div
+      class="flex flex-col gap-6 pt-24 px-4 pb-6 md:px-6 xl:px-8 lg:flex-row"
+      :class="sidebarPinned ? 'max-w-[1600px] mx-auto' : 'w-full max-w-none'"
+    >
       <div v-show="sidebarPinned" class="relative">
         <LazyGeneralSidebar />
       </div>

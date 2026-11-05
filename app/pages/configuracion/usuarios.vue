@@ -19,9 +19,11 @@ const canViewUsers = computed(() => {
 const canCreateUsers = computed(() => isConfigAdmin.value && hasPermission('configuracion.usuarios.crear'))
 const canEditUserRoles = computed(() => isConfigAdmin.value && hasPermission('configuracion.usuarios.cambiar_rol'))
 const canChangeUserPassword = computed(() => isConfigAdmin.value && hasPermission('configuracion.usuarios.cambiar_contrasena'))
+const canAssignMedicos = computed(() => isConfigAdmin.value && hasPermission('configuracion.usuarios.asignar_medicos'))
 
 const users = ref([])
 const roles = ref([])
+const medicos = ref([])
 const loading = ref(false)
 const saving = ref(false)
 
@@ -43,6 +45,13 @@ const passwordUser = ref(null)
 const passwordForm = ref({ password: '', password_confirmation: '' })
 const passwordErrors = ref({})
 
+// --- Modal: Asociar médicos ---
+const showMedicosModal = ref(false)
+const medicosUser = ref(null)
+const selectedMedicos = ref([])
+const savingMedicos = ref(false)
+const busquedaMedico = ref('')
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 const extractErrors = (errorValue) => {
     const status = errorValue?.response?.status ?? errorValue?.statusCode
@@ -54,9 +63,31 @@ const extractErrors = (errorValue) => {
 
 const firstError = (errors, field) => errors[field]?.[0] ?? null
 
+const esTecnica = (user) => (user?.roles || []).some((role) => {
+    const nombre = String(role.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    return nombre === 'tecnica' || nombre === 'tecnico'
+})
+
+const medicosFiltrados = computed(() => {
+    const term = busquedaMedico.value.trim().toLocaleLowerCase('es-CO')
+    if (!term) return medicos.value
+
+    return medicos.value.filter((medico) => (
+        String(medico.nombre || '').toLocaleLowerCase('es-CO').includes(term)
+        || String(medico.identificacion || '').toLocaleLowerCase('es-CO').includes(term)
+    ))
+})
+
+const replaceUser = (updatedUser) => {
+    if (!updatedUser?.id) return
+    const index = users.value.findIndex(user => user.id === updatedUser.id)
+    if (index === -1) users.value.push(updatedUser)
+    else users.value.splice(index, 1, updatedUser)
+}
+
 // ── fetchData ─────────────────────────────────────────────────────────────────
-const fetchData = async () => {
-    loading.value = true
+const fetchData = async (silent = false) => {
+    if (!silent) loading.value = true
     try {
         const { data, error } = await useSanctumFetch('/api/users-roles', { method: 'GET' })
         if (error.value) {
@@ -65,11 +96,12 @@ const fetchData = async () => {
         }
         users.value = data.value.data.users || []
         roles.value = data.value.data.roles || []
+        medicos.value = data.value.data.medicos || []
     } catch (e) {
         console.error(e)
         push.error({ title: 'Error', message: 'Ocurrió un error al cargar los datos' })
     } finally {
-        loading.value = false
+        if (!silent) loading.value = false
     }
 }
 
@@ -102,7 +134,7 @@ const saveRoles = async () => {
     if (!selectedUser.value || !canEditUserRoles.value) return
     saving.value = true
     try {
-        const { error } = await useSanctumFetch(`/api/users/${selectedUser.value.id}/roles`, {
+        const { data, error } = await useSanctumFetch(`/api/users/${selectedUser.value.id}/roles`, {
             method: 'PUT',
             body: { roles: selectedRoles.value }
         })
@@ -111,8 +143,9 @@ const saveRoles = async () => {
             return
         }
         push.success({ title: 'Exito', message: 'Roles actualizados correctamente' })
-        await fetchData()
+        replaceUser(data.value?.user)
         closeModal()
+        void fetchData(true)
     } catch (e) {
         console.error(e)
         push.error({ title: 'Error', message: 'Ocurrió un error al actualizar los roles' })
@@ -125,6 +158,45 @@ const toggleRole = (roleName) => {
     const index = selectedRoles.value.indexOf(roleName)
     if (index > -1) selectedRoles.value.splice(index, 1)
     else selectedRoles.value.push(roleName)
+}
+
+const openMedicosModal = (user) => {
+    if (!canAssignMedicos.value || !esTecnica(user)) return
+    medicosUser.value = user
+    selectedMedicos.value = (user.medicos || []).map(medico => medico.id)
+    busquedaMedico.value = ''
+    showMedicosModal.value = true
+}
+
+const closeMedicosModal = () => {
+    showMedicosModal.value = false
+    medicosUser.value = null
+    selectedMedicos.value = []
+    busquedaMedico.value = ''
+}
+
+const saveMedicos = async () => {
+    if (!medicosUser.value || !canAssignMedicos.value) return
+    savingMedicos.value = true
+    try {
+        const { data, error } = await useSanctumFetch(`/api/users/${medicosUser.value.id}/medicos`, {
+            method: 'PUT',
+            body: { medico_ids: selectedMedicos.value },
+        })
+        if (error.value) {
+            push.error({ title: 'Error', message: 'No se pudieron actualizar los médicos asociados' })
+            return
+        }
+        push.success({ title: 'Éxito', message: 'Médicos asociados correctamente' })
+        replaceUser(data.value?.user)
+        closeMedicosModal()
+        void fetchData(true)
+    } catch (e) {
+        console.error(e)
+        push.error({ title: 'Error', message: 'Ocurrió un error al asociar los médicos' })
+    } finally {
+        savingMedicos.value = false
+    }
 }
 
 // ── Modal Crear Usuario ───────────────────────────────────────────────────────
@@ -150,7 +222,7 @@ const createUser = async () => {
     createErrors.value = {}
     creatingUser.value = true
     try {
-        const { error } = await useSanctumFetch('/api/users', {
+        const { data, error } = await useSanctumFetch('/api/users', {
             method: 'POST',
             body: {
                 name: newUser.value.name,
@@ -167,8 +239,9 @@ const createUser = async () => {
             return
         }
         push.success({ title: 'Exito', message: 'Usuario creado correctamente' })
-        await fetchData()
+        replaceUser(data.value?.user)
         closeCreateModal()
+        void fetchData(true)
     } catch (e) {
         console.error(e)
         push.error({ title: 'Error', message: 'Ocurrió un error al crear el usuario' })
@@ -211,6 +284,7 @@ const savePassword = async () => {
         }
         push.success({ title: 'Exito', message: 'Contraseña actualizada correctamente' })
         closePasswordModal()
+        void fetchData(true)
     } catch (e) {
         console.error(e)
         push.error({ title: 'Error', message: 'Ocurrió un error al cambiar la contraseña' })
@@ -251,6 +325,7 @@ const savePassword = async () => {
                         <th class="border border-slate-200 p-3 text-left">Nombre</th>
                         <th class="border border-slate-200 p-3 text-left">Email</th>
                         <th class="border border-slate-200 p-3 text-left">Roles</th>
+                        <th class="border border-slate-200 p-3 text-left">Médicos asociados</th>
                         <th class="border border-slate-200 p-3 text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -270,6 +345,14 @@ const savePassword = async () => {
                             </div>
                         </td>
                         <td class="border border-slate-200 p-3">
+                            <div v-if="esTecnica(user) && user.medicos?.length" class="flex flex-wrap gap-1">
+                                <span v-for="medico in user.medicos" :key="medico.id" class="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-medium">
+                                    {{ medico.nombre }}
+                                </span>
+                            </div>
+                            <span v-else class="text-slate-400 text-xs">{{ esTecnica(user) ? 'Sin médicos' : 'No aplica' }}</span>
+                        </td>
+                        <td class="border border-slate-200 p-3">
                             <div class="flex items-center justify-center gap-2 flex-wrap">
                                 <button
                                     v-if="canEditUserRoles"
@@ -285,7 +368,14 @@ const savePassword = async () => {
                                 >
                                     Cambiar contraseña
                                 </button>
-                                <span v-if="!canEditUserRoles && !canChangeUserPassword" class="text-slate-400 text-xs">Sin acciones disponibles</span>
+                                <button
+                                    v-if="canAssignMedicos && esTecnica(user)"
+                                    @click="openMedicosModal(user)"
+                                    class="bg-cyan-700 text-white px-3 py-1.5 rounded-lg hover:bg-cyan-800 text-xs font-medium"
+                                >
+                                    Asociar médicos
+                                </button>
+                                <span v-if="!canEditUserRoles && !canChangeUserPassword && !canAssignMedicos" class="text-slate-400 text-xs">Sin acciones disponibles</span>
                             </div>
                         </td>
                     </tr>
@@ -313,6 +403,33 @@ const savePassword = async () => {
                     </button>
                     <button @click="saveRoles" :disabled="saving" class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50">
                         {{ saving ? 'Guardando...' : 'Guardar' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showMedicosModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeMedicosModal">
+            <div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 border border-slate-200 shadow-xl">
+                <h2 class="text-xl font-bold mb-1">Asociar médicos</h2>
+                <p class="text-sm text-slate-600 mb-4">{{ medicosUser?.name }} solo verá en la consulta médica las cotizaciones de los médicos seleccionados.</p>
+                <input
+                    v-model="busquedaMedico"
+                    type="search"
+                    placeholder="Buscar por nombre o identificación"
+                    class="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                />
+                <div class="max-h-72 overflow-y-auto space-y-1 rounded-lg border border-slate-200 p-2">
+                    <label v-for="medico in medicosFiltrados" :key="medico.id" class="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 cursor-pointer">
+                        <input v-model="selectedMedicos" type="checkbox" :value="medico.id" class="h-4 w-4" />
+                        <span class="text-sm text-slate-800">{{ medico.nombre }}</span>
+                        <span v-if="medico.identificacion" class="text-xs text-slate-500">{{ medico.identificacion }}</span>
+                    </label>
+                    <p v-if="!medicosFiltrados.length" class="p-3 text-sm text-slate-500">No hay médicos que coincidan con la búsqueda.</p>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button @click="closeMedicosModal" :disabled="savingMedicos" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">Cancelar</button>
+                    <button @click="saveMedicos" :disabled="savingMedicos" class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-800 disabled:opacity-50">
+                        {{ savingMedicos ? 'Guardando...' : 'Guardar médicos' }}
                     </button>
                 </div>
             </div>

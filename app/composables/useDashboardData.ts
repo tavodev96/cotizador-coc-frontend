@@ -195,7 +195,7 @@ export const useDashboardData = () => {
         try {
             await ejecutarFetchDashboard(periodo);
 
-            if (periodo !== 'todo' && totalCotizaciones.value === 0) {
+            if (periodo !== 'todo' && totalCotizaciones.value === 0 && roleDashboard.value.rol !== 'tecnica') {
                 await ejecutarFetchDashboard('todo');
 
                 const etiqueta = {

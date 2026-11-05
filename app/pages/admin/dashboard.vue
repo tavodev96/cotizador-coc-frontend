@@ -205,7 +205,10 @@
       </div>
 
       <div v-if="roleDashboard.blocks.length || esCajero" class="bg-white border border-slate-200 rounded-2xl p-6">
-        <h2 class="text-lg font-semibold text-slate-900 mb-3">Métricas del rol</h2>
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">{{ esTecnica ? 'Codificaciones recientes' : 'Métricas del rol' }}</h2>
+          <p v-if="esTecnica" class="mt-1 text-sm text-slate-500">Actividad más reciente organizada por médico.</p>
+        </div>
         <div v-if="esCajero" class="space-y-3 text-sm text-slate-700">
           <div class="flex items-center justify-between gap-3">
             <p class="font-semibold">Últimas búsquedas en consultas</p>
@@ -225,25 +228,73 @@
             </NuxtLink>
           </div>
         </div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
-          <div v-for="block in roleDashboard.blocks" :key="block.titulo" class="bg-slate-50 rounded-lg p-3">
-            <p class="font-semibold mb-1">{{ block.titulo }}</p>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
+          <template v-for="block in roleDashboard.blocks" :key="block.titulo">
+            <article
+              v-if="esTecnica && block.tipo === 'lista'"
+              class="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+            >
+              <header class="flex items-start justify-between gap-3 border-b border-indigo-100 bg-gradient-to-r from-[#162983] to-indigo-600 px-4 py-3.5 text-white">
+                <div class="min-w-0">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-100">Médico</p>
+                  <h3 class="mt-1 truncate text-base font-semibold">{{ block.titulo.replace('Codificaciones recientes — ', '') }}</h3>
+                </div>
+                <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium ring-1 ring-inset ring-white/20">
+                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ block.items?.length || 0 }} reciente{{ (block.items?.length || 0) === 1 ? '' : 's' }}
+                </span>
+              </header>
 
-            <template v-if="block.tipo === 'lista'">
-              <p v-if="cargandoDashboard" class="text-slate-400 animate-pulse">Cargando...</p>
-              <p v-else-if="block.items.length === 0" class="text-slate-500">Sin datos</p>
-              <ul v-else class="space-y-1">
-                <li v-for="(item, index) in block.items" :key="`${block.titulo}-${index}`">
-                  {{ item.etiqueta }}: {{ item.valor }}<span v-if="item.extra"> ({{ item.extra }})</span>
-                </li>
-              </ul>
-            </template>
+              <div class="p-3.5">
+                <div v-if="cargandoDashboard" class="space-y-2.5 animate-pulse">
+                  <div v-for="item in 3" :key="`skeleton-${block.titulo}-${item}`" class="h-14 rounded-xl bg-slate-100"></div>
+                </div>
+                <div v-else-if="block.items.length === 0" class="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
+                  <svg class="h-7 w-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                  </svg>
+                  <p class="mt-2 text-sm font-medium text-slate-600">Sin codificaciones en este periodo</p>
+                </div>
+                <ul v-else class="space-y-2">
+                  <li
+                    v-for="(item, index) in block.items"
+                    :key="`${block.titulo}-${index}`"
+                    class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 transition group-hover:border-indigo-100"
+                  >
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-700">
+                      {{ index + 1 }}
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate font-semibold text-slate-800">{{ item.etiqueta }}</p>
+                      <p class="mt-0.5 truncate text-xs text-slate-500">{{ item.valor }}</p>
+                    </div>
+                    <span v-if="item.extra" class="hidden rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-500 sm:inline">{{ item.extra }}</span>
+                  </li>
+                </ul>
+              </div>
+            </article>
 
-            <template v-else>
-              <p :class="cargandoDashboard ? 'text-slate-400 animate-pulse' : ''">{{ cargandoDashboard ? 'Cargando...' : block.valor }}</p>
-              <p v-if="block.descripcion" class="text-slate-500 mt-1">{{ block.descripcion }}</p>
-            </template>
-          </div>
+            <div v-else class="bg-slate-50 rounded-lg p-3">
+              <p class="font-semibold mb-1">{{ block.titulo }}</p>
+
+              <template v-if="block.tipo === 'lista'">
+                <p v-if="cargandoDashboard" class="text-slate-400 animate-pulse">Cargando...</p>
+                <p v-else-if="block.items.length === 0" class="text-slate-500">Sin datos</p>
+                <ul v-else class="space-y-1">
+                  <li v-for="(item, index) in block.items" :key="`${block.titulo}-${index}`">
+                    {{ item.etiqueta }}: {{ item.valor }}<span v-if="item.extra"> ({{ item.extra }})</span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-else>
+                <p :class="cargandoDashboard ? 'text-slate-400 animate-pulse' : ''">{{ cargandoDashboard ? 'Cargando...' : block.valor }}</p>
+                <p v-if="block.descripcion" class="text-slate-500 mt-1">{{ block.descripcion }}</p>
+              </template>
+            </div>
+          </template>
         </div>
       </div>
     </template>
@@ -268,6 +319,7 @@ const {
 
 const esAdmin = computed(() => roleDashboard.value.rol === 'administrador')
 const esCajero = computed(() => roleDashboard.value.rol === 'cajero')
+const esTecnica = computed(() => roleDashboard.value.rol === 'tecnica')
 const busquedasRecientes = ref([])
 const periodos = [
   { label: 'Hoy', valor: 'hoy' },
@@ -281,7 +333,6 @@ const totalCotizacionesAdmin = computed(() => {
   return Number(metricasDashboard.value?.conversion?.total_cotizaciones ?? 0)
 })
 
-const ultimaCotizacionTexto = computed(() => formatearFechaHora(metricasDashboard.value?.ultima_cotizacion))
 const chartColors = ['#162983', '#4f46e5', '#059669', '#f59e0b', '#dc2626', '#64748b']
 const conversionCircunferencia = 2 * Math.PI * 48
 

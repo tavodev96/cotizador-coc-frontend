@@ -35,6 +35,11 @@ interface OpcionCatalogo {
   name?: string
 }
 
+interface ProcedimientoReporte {
+  cup: string
+  nombre: string | null
+}
+
 interface ReporteItem {
   id: number
   tipo_gestion: string
@@ -52,6 +57,7 @@ interface ReporteItem {
   numero_identificacion_paciente: string | null
   cups?: string[]
   cups_procedimientos: string | null
+  procedimientos?: ProcedimientoReporte[]
   lateralidad: string | null
   valor_coc_dc_derecho_clinico: string
   asesor: string | null
@@ -277,6 +283,30 @@ const irPagina = async (nuevaPagina: number) => {
   await buscar()
 }
 
+const obtenerProcedimientos = (item: ReporteItem): ProcedimientoReporte[] => {
+  if (Array.isArray(item.procedimientos) && item.procedimientos.length) {
+    return item.procedimientos
+  }
+
+  const cups = Array.isArray(item.cups)
+    ? item.cups
+    : String(item.cups_procedimientos || '')
+      .split('|')
+      .map((cup) => cup.trim())
+      .filter(Boolean)
+
+  return cups.map((cup) => ({ cup, nombre: null }))
+}
+
+const tooltipProcedimientos = (item: ReporteItem) => {
+  const procedimientos = obtenerProcedimientos(item)
+  if (!procedimientos.length) return 'No hay procedimientos registrados.'
+
+  return procedimientos
+    .map(({ cup, nombre }) => `${cup}: ${nombre || 'Nombre no registrado'}`)
+    .join('\n')
+}
+
 const descargarExcel = async () => {
   if (!puedeExportar.value) return
 
@@ -298,31 +328,24 @@ const descargarExcel = async () => {
 
     const payload = data.value as { data?: ReporteItem[] }
     const registros = payload?.data || []
-    const maxCups = registros.reduce((max, item) => {
-      const cups = Array.isArray(item.cups)
-        ? item.cups
-        : String(item.cups_procedimientos || '')
-          .split('|')
-          .map((cup) => cup.trim())
-          .filter(Boolean)
-
-      return Math.max(max, cups.length)
-    }, 0)
-    const cupHeaders = Array.from({ length: Math.max(1, maxCups) }, (_, index) => `CUP ${index + 1}`)
+    const maxProcedimientos = registros.reduce(
+      (max, item) => Math.max(max, obtenerProcedimientos(item).length),
+      0,
+    )
+    const procedimientoHeaders = Array.from({ length: Math.max(1, maxProcedimientos) }, (_, index) => ({
+      cup: `CUP ${index + 1}`,
+      nombre: `Nombre procedimiento ${index + 1}`,
+    }))
 
     const filas = registros.map((item) => {
       const fila: Record<string, string> = {}
-      const cups = Array.isArray(item.cups)
-        ? item.cups
-        : String(item.cups_procedimientos || '')
-          .split('|')
-          .map((cup) => cup.trim())
-          .filter(Boolean)
+      const procedimientos = obtenerProcedimientos(item)
 
       columnas.forEach((columna) => {
         if (columna.key === 'cups_procedimientos') {
-          cupHeaders.forEach((header, index) => {
-            fila[header] = cups[index] || 'N/A'
+          procedimientoHeaders.forEach((headers, index) => {
+            fila[headers.cup] = procedimientos[index]?.cup || 'N/A'
+            fila[headers.nombre] = procedimientos[index]?.nombre || 'N/A'
           })
           return
         }
@@ -338,7 +361,9 @@ const descargarExcel = async () => {
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Reporte Cotizaciones')
 
-    const headers = columnas.flatMap((c) => c.key === 'cups_procedimientos' ? cupHeaders : [c.label])
+    const headers = columnas.flatMap((c) => c.key === 'cups_procedimientos'
+      ? procedimientoHeaders.flatMap((headers) => [headers.cup, headers.nombre])
+      : [c.label])
     worksheet.addRow(headers)
 
     filas.forEach((fila) => {
@@ -551,7 +576,14 @@ onMounted(async () => {
                 :key="`${item.id}-${col.key}`"
                 class="border border-slate-200 px-3 py-2 text-sm text-slate-700"
               >
-                {{ item[col.key] || 'N/A' }}
+                <span
+                  v-if="col.key === 'cups_procedimientos'"
+                  class="cursor-help decoration-dotted underline underline-offset-4"
+                  :title="tooltipProcedimientos(item)"
+                >
+                  {{ item.cups_procedimientos || 'N/A' }}
+                </span>
+                <template v-else>{{ item[col.key] || 'N/A' }}</template>
               </td>
             </tr>
           </tbody>
