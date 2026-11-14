@@ -24,11 +24,6 @@ const historico_estados = ref([])
 const mostrarModalHistorico = ref(false)
 const mostrarModalVigencia = ref(false)
 const mostrarModalPaciente = ref(false)
-const mostrarModalAutorizacion = ref(false)
-const numeroAutorizacionEditable = ref('')
-const historialAutorizacion = ref([])
-const cargandoHistorialAutorizacion = ref(false)
-const guardandoAutorizacion = ref(false)
 const savingComentario = ref(false)
 const loading = ref(true)
 const loadingEstados = ref(false)
@@ -37,6 +32,7 @@ const loadingEstadoGestion = ref(false)
 const savingPriority = ref(false)
 const syncingSalesforce = ref(false)
 const lastSalesforceLog = ref(null)
+const esPgp = computed(() => String(cotizacion.value?.codigo || '').startsWith('PGP-'))
 const auditoriaLogs = ref([])
 const loadingAuditoriaLogs = ref(false)
 
@@ -165,60 +161,6 @@ const pushNotification = (type, message, title) => {
     message: message,
     ariaRole: 'alert'
   })
-}
-
-const cargarHistorialAutorizacion = async () => {
-  cargandoHistorialAutorizacion.value = true
-  try {
-    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/codificacion/autorizacion/historial`)
-    if (error.value) {
-      pushNotification('error', 'No se pudo cargar el historial de autorizaciones.', 'Error')
-      return
-    }
-    historialAutorizacion.value = data.value?.historial || []
-  } finally {
-    cargandoHistorialAutorizacion.value = false
-  }
-}
-
-const abrirModalAutorizacion = async () => {
-  numeroAutorizacionEditable.value = cotizacion.value?.codificacion?.numero_autorizacion || ''
-  mostrarModalAutorizacion.value = true
-  await cargarHistorialAutorizacion()
-}
-
-const guardarAutorizacion = async () => {
-  const numero = String(numeroAutorizacionEditable.value || '').trim()
-  if (!numero || guardandoAutorizacion.value) {
-    if (!numero) pushNotification('warning', 'Ingresa el número de autorización.', 'Validación')
-    return
-  }
-
-  guardandoAutorizacion.value = true
-  try {
-    const { data, error } = await useSanctumFetch(`/api/cotizacion/${route.params.id}/codificacion/autorizacion`, {
-      method: 'PUT',
-      body: { numero_autorizacion: numero },
-    })
-
-    if (error.value) {
-      const errors = error.value?.data?.errors || {}
-      const mensaje = Object.values(errors).find((items) => Array.isArray(items) && items.length)?.[0]
-        || error.value?.data?.message
-        || 'No se pudo actualizar la autorización.'
-      pushNotification('error', mensaje, 'Error')
-      return
-    }
-
-    if (cotizacion.value?.codificacion) {
-      cotizacion.value.codificacion.numero_autorizacion = data.value?.numero_autorizacion || numero
-    }
-    historialAutorizacion.value = data.value?.historial || historialAutorizacion.value
-    numeroAutorizacionEditable.value = data.value?.numero_autorizacion || numero
-    pushNotification('success', 'Número de autorización actualizado.', 'Éxito')
-  } finally {
-    guardandoAutorizacion.value = false
-  }
 }
 
 const contieneReferenciaCuentaSalesforce = (payload) => {
@@ -725,7 +667,7 @@ const direccionPaciente = computed(() => {
         <p class="text-slate-700"><span class="font-bold">Número de identificación:</span> <span class="font-bold">{{ cotizacion?.paciente?.numero_identificacion || 'Sin identificación' }}</span></p>
         <p class="text-slate-700"><span class="font-bold">Entidad:</span> {{ cotizacion?.entidad?.nombre || cotizacion?.paciente?.entidad?.nombre || 'N/A' }}</p>
         <p class="text-slate-700"><span class="font-bold">Asesor:</span> {{ cotizacion?.asesor.name }}</p>
-        <p class="text-slate-700"><span class="font-bold">Salesforce:</span>
+        <p v-if="!esPgp" class="text-slate-700"><span class="font-bold">Salesforce:</span>
           <span :class="{
             'text-emerald-700': cotizacion?.salesforce_status === 'success',
             'text-amber-700': cotizacion?.salesforce_status === 'queued',
@@ -753,7 +695,8 @@ const direccionPaciente = computed(() => {
         </p>
         <div v-if="cotizacion?.codificacion" class="flex flex-wrap items-center gap-2 text-slate-700">
           <span class="font-bold">Codificación:</span>
-          <span class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.codificacion?.numero_autorizacion || 'Sin autorización' }}</span>
+          <span v-if="!esPgp" class="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-1 text-sm font-semibold">{{ cotizacion?.codificacion?.numero_autorizacion || 'Sin autorización' }}</span>
+          <span v-if="cotizacion.codificacion.renovada" class="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-semibold text-amber-800">Renovada</span>
         </div>
         <p v-if="mostrarChipVigencia" class="text-slate-700">
           <span class="font-bold">Vigencia:</span>
@@ -764,14 +707,7 @@ const direccionPaciente = computed(() => {
         <button type="button" class="w-fit rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100" @click="mostrarModalPaciente = true">
           Información del paciente
         </button>
-        <button
-          v-if="cotizacion?.codificacion"
-          type="button"
-          class="w-fit rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
-          @click="abrirModalAutorizacion"
-        >
-          Gestionar autorización
-        </button>
+        <CotizacionAuthorizationManager v-if="cotizacion?.codificacion && !esPgp" :cotizacion="cotizacion" @updated="(codificacion, fechaVigencia) => { cotizacion.codificacion = codificacion; cotizacion.fecha_vigencia = fechaVigencia }" />
       </div>
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
         <div class="flex flex-wrap items-center gap-2">
@@ -826,7 +762,7 @@ const direccionPaciente = computed(() => {
               class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition">
               Ver histórico
             </button>
-            <button @click="mostrarModalVigencia = true"
+            <button v-if="!esPgp" @click="mostrarModalVigencia = true"
               class="bg-emerald-700 text-white px-4 py-2 rounded-lg hover:bg-emerald-800 transition">
               Ver historial de vigencia
             </button>
@@ -978,7 +914,7 @@ const direccionPaciente = computed(() => {
           
           <NuxtLink :to="`/cotizacion/editar/${cotizacion.id}`"
             class="bg-indigo-700 text-white px-4 py-2 rounded-lg"> Editar</NuxtLink>
-          <button v-if="canRetrySalesforce && puedeEnviarSalesforce" @click="syncSalesforce" :disabled="syncingSalesforce"
+          <button v-if="!esPgp && canRetrySalesforce && puedeEnviarSalesforce" @click="syncSalesforce" :disabled="syncingSalesforce"
             class="bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-sky-700 transition">
             <template v-if="!syncingSalesforce">Enviar a Salesforce</template>
             <template v-else>
@@ -989,7 +925,7 @@ const direccionPaciente = computed(() => {
               Sincronizando...
             </template>
           </button>
-          <div v-if="lastSalesforceLog" class="flex flex-col gap-1 text-xs p-2 bg-slate-100 rounded-lg">
+          <div v-if="!esPgp && lastSalesforceLog" class="flex flex-col gap-1 text-xs p-2 bg-slate-100 rounded-lg">
             <span class="font-semibold">Última sincronización:</span>
             <span :class="{
               'text-green-600': lastSalesforceLog.status === 'success',
@@ -1086,49 +1022,6 @@ const direccionPaciente = computed(() => {
     </div>
     </section>
   </div>
-
-  <Teleport to="body">
-    <Transition name="fade">
-      <div v-if="mostrarModalAutorizacion" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4" @click.self="mostrarModalAutorizacion = false">
-        <section class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
-          <div class="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-            <div>
-              <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Codificación</p>
-              <h3 class="mt-1 text-xl font-semibold text-slate-900">Número de autorización</h3>
-              <p class="mt-1 text-sm text-slate-500">El número debe ser único. Cada cambio queda registrado.</p>
-            </div>
-            <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-600 hover:bg-slate-200" aria-label="Cerrar" @click="mostrarModalAutorizacion = false">×</button>
-          </div>
-
-          <div class="mt-5">
-            <label class="block text-sm font-semibold text-slate-700" for="numero-autorizacion">Número de autorización</label>
-            <input id="numero-autorizacion" v-model="numeroAutorizacionEditable" type="text" class="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" :disabled="guardandoAutorizacion" />
-            <div class="mt-3 flex justify-end gap-2">
-              <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" :disabled="guardandoAutorizacion" @click="mostrarModalAutorizacion = false">Cancelar</button>
-              <button type="button" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60" :disabled="guardandoAutorizacion" @click="guardarAutorizacion">{{ guardandoAutorizacion ? 'Guardando...' : 'Guardar autorización' }}</button>
-            </div>
-          </div>
-
-          <div class="mt-6 border-t border-slate-200 pt-5">
-            <h4 class="font-semibold text-slate-900">Historial de autorizaciones</h4>
-            <p v-if="cargandoHistorialAutorizacion" class="mt-3 text-sm text-slate-500">Cargando historial...</p>
-            <p v-else-if="!historialAutorizacion.length" class="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Aún no hay cambios registrados.</p>
-            <ol v-else class="mt-3 space-y-3 border-l-2 border-emerald-100 pl-4">
-              <li v-for="registro in historialAutorizacion" :key="registro.id" class="relative">
-                <span class="absolute -left-[1.45rem] top-1.5 h-3 w-3 rounded-full bg-emerald-500 ring-4 ring-white"></span>
-                <p class="font-semibold text-slate-800">{{ registro.accion === 'CREATE' ? 'Autorización registrada' : 'Autorización actualizada' }}</p>
-                <p class="mt-1 text-sm text-slate-600">
-                  <template v-if="registro.anterior">De <b>{{ registro.anterior }}</b> a <b>{{ registro.numero_autorizacion }}</b></template>
-                  <template v-else><b>{{ registro.numero_autorizacion }}</b></template>
-                </p>
-                <p class="mt-1 text-xs text-slate-500">{{ registro.usuario || 'Sistema' }} · {{ formatoFecha(registro.fecha) }}</p>
-              </li>
-            </ol>
-          </div>
-        </section>
-      </div>
-    </Transition>
-  </Teleport>
 
   <!-- Modal -->
   <div v-if="mostrarModalHistorico" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

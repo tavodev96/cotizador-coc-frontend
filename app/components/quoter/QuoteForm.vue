@@ -118,7 +118,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Origen:</label>
-                    <select v-model="cotizacion.origen" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white">
+                    <select v-model="cotizacion.origen" :disabled="esPgp" class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white">
                         <option value="" select disabled>Seleccionar origen del ordenamiento</option>
                         <option value="1">Consultorio privado</option>
                         <option value="2">Consultorio institucional</option>
@@ -150,6 +150,7 @@
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Tipo de gestión</label>
                         <input
                             v-model="cotizacion.tipo_gestion"
+                            :disabled="esPgp"
                             list="tipos-gestion"
                             class="w-full h-12 border border-slate-300 rounded-lg px-3 bg-white"
                             @blur="validarTipoGestion"
@@ -158,7 +159,7 @@
                             <option v-for="tipo in tiposGestion" :key="tipo" :value="tipo" />
                         </datalist>
                     </div>
-                    <div v-if="isCodificacion" class="w-1/2">
+                    <div v-if="isCodificacion && !esPgp" class="w-1/2">
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Número de autorización</label>
                         <input
                             v-model="codificacion.autorizacion"
@@ -482,16 +483,16 @@
                 <div v-if="isCodificacion && mode === 'create'" class="mt-4 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <p class="text-sm font-semibold text-slate-800">Documento de la codificación</p>
-                            <p class="mt-1 text-xs text-slate-500">Opcional. Se registrará como comentario en la codificación.</p>
+                            <p class="text-sm font-semibold text-slate-800">Documentos de la codificación</p>
+                            <p class="mt-1 text-xs text-slate-500">Opcional. Hasta 10 archivos de 2 MB cada uno.</p>
                         </div>
                         <label class="inline-flex cursor-pointer items-center rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
-                            Seleccionar archivo
-                            <input type="file" class="sr-only" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" @change="seleccionarDocumentoCodificacion" />
+                            Seleccionar archivos
+                            <input type="file" multiple class="sr-only" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" @change="seleccionarDocumentoCodificacion" />
                         </label>
                     </div>
-                    <div v-if="documentoCodificacion" class="mt-3 flex items-center gap-3 rounded-lg border border-indigo-100 bg-white p-3">
-                        <img v-if="vistaPreviaDocumentoCodificacion" :src="vistaPreviaDocumentoCodificacion" alt="Vista previa del documento" class="h-14 w-14 rounded-lg object-cover" />
+                    <div v-for="(archivo, index) in documentosCodificacion" :key="`${archivo.name}-${index}`" class="mt-3 flex items-center gap-3 rounded-lg border border-indigo-100 bg-white p-3">
+                        <img v-if="vistasPreviasCodificacion[index]" :src="vistasPreviasCodificacion[index]" alt="Vista previa del documento" class="h-14 w-14 rounded-lg object-cover" />
                         <div v-else class="flex h-14 w-14 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H6.75a3.375 3.375 0 00-3.375 3.375v12.75a3.375 3.375 0 003.375 3.375h5.625" />
@@ -499,11 +500,13 @@
                             </svg>
                         </div>
                         <div class="min-w-0 flex-1">
-                            <p class="truncate text-sm font-medium text-slate-800">{{ documentoCodificacion.name }}</p>
-                            <p class="text-xs text-slate-500">{{ tamanoArchivo(documentoCodificacion.size) }}</p>
+                            <p class="truncate text-sm font-medium text-slate-800">{{ archivo.name }}</p>
+                            <p class="text-xs text-slate-500">{{ tamanoArchivo(archivo.size) }}</p>
                         </div>
-                        <button type="button" class="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-rose-600" aria-label="Quitar documento" @click="limpiarDocumentoCodificacion">×</button>
+                        <button type="button" class="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-rose-600" aria-label="Quitar documento" @click="quitarDocumentoCodificacion(index)">×</button>
                     </div>
+                    <label class="mt-4 block text-sm font-semibold text-slate-700">Comentario de la codificación</label>
+                    <textarea v-model="comentarioCodificacion" maxlength="2000" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 p-3" placeholder="Escribe un comentario para el historial de comentarios"></textarea>
                 </div>
                 <div class="sticky bottom-3 z-10 md:static bg-white/95 md:bg-transparent backdrop-blur-sm md:backdrop-blur-0 border border-slate-200 md:border-0 rounded-xl md:rounded-none p-3 md:p-0 flex justify-center items-center gap-2">
                     <button @click="guardarCotizacion" :disabled="loading || validandoAutorizacion || autorizacionDuplicada"
@@ -757,6 +760,15 @@ import { Notivue, Notification, filledIcons } from 'notivue'
 import { nextTick } from 'vue'
 const { getById, create, update } = useCotizacionApi()
 const { paciente, cotizacion, codificacion, totalCotizacion, totalInsumos, totalLentes } = useCotizacionForm()
+const { hasRole, ensureUserPermissions } = useUserPermissions()
+const esPgp = computed(() => hasRole('asesor_pgp'))
+watch(esPgp, (pgp) => {
+    if (pgp) {
+        cotizacion.value.origen = '2'
+        cotizacion.value.tipo_gestion = 'codificación'
+        codificacion.value.autorizacion = ''
+    }
+}, { immediate: true })
 const route = useRoute();
 const router = useRouter();
 
@@ -808,8 +820,9 @@ const codigoSeleccionado = ref([]);
 const seleccionarTodo = ref({});
 const procedimientosFormulados = ref([])
 const loading = ref(false);
-const documentoCodificacion = ref(null)
-const vistaPreviaDocumentoCodificacion = ref('')
+const documentosCodificacion = ref([])
+const vistasPreviasCodificacion = ref([])
+const comentarioCodificacion = ref('')
 const validandoAutorizacion = ref(false)
 const autorizacionDuplicada = ref(false)
 const autorizacionVerificada = ref('')
@@ -1164,6 +1177,7 @@ onMounted(async () => {
 })
 
 onMounted(() => {
+    ensureUserPermissions()
     document.addEventListener('click', handleClickOutsideDropdowns)
 })
 
@@ -1177,27 +1191,32 @@ const isCodificacion = computed(() => {
 })
 
 const limpiarDocumentoCodificacion = () => {
-    if (vistaPreviaDocumentoCodificacion.value) {
-        URL.revokeObjectURL(vistaPreviaDocumentoCodificacion.value)
-    }
-    documentoCodificacion.value = null
-    vistaPreviaDocumentoCodificacion.value = ''
+    vistasPreviasCodificacion.value.forEach((url) => { if (url) URL.revokeObjectURL(url) })
+    documentosCodificacion.value = []
+    vistasPreviasCodificacion.value = []
+    comentarioCodificacion.value = ''
+}
+
+const quitarDocumentoCodificacion = (index) => {
+    if (vistasPreviasCodificacion.value[index]) URL.revokeObjectURL(vistasPreviasCodificacion.value[index])
+    documentosCodificacion.value.splice(index, 1)
+    vistasPreviasCodificacion.value.splice(index, 1)
 }
 
 const seleccionarDocumentoCodificacion = (event) => {
-    const archivo = event.target.files?.[0]
-    limpiarDocumentoCodificacion()
+    const archivos = Array.from(event.target.files || [])
     event.target.value = ''
-    if (!archivo) return
-
-    if (archivo.size > 2048 * 1024) {
-        pushNotification('error', 'El documento no puede superar 2 MB.', 'Archivo no válido')
-        return
-    }
-
-    documentoCodificacion.value = archivo
-    if (archivo.type.startsWith('image/')) {
-        vistaPreviaDocumentoCodificacion.value = URL.createObjectURL(archivo)
+    for (const archivo of archivos) {
+        if (documentosCodificacion.value.length >= 10) {
+            pushNotification('error', 'Solo puedes adjuntar hasta 10 documentos.', 'Archivo no válido')
+            break
+        }
+        if (archivo.size > 2048 * 1024) {
+            pushNotification('error', `${archivo.name} supera 2 MB.`, 'Archivo no válido')
+            continue
+        }
+        documentosCodificacion.value.push(archivo)
+        vistasPreviasCodificacion.value.push(archivo.type.startsWith('image/') ? URL.createObjectURL(archivo) : '')
     }
 }
 
@@ -1216,6 +1235,7 @@ const reiniciarValidacionAutorizacion = () => {
 }
 
 const verificarAutorizacion = async () => {
+    if (esPgp.value) return true
     if (props.mode !== 'create' || !isCodificacion.value) return true
 
     const numero = String(codificacion.value.autorizacion || '').trim()
@@ -1993,8 +2013,8 @@ const validarAntesDeGuardar = () => {
     }
 
     if (isCodificacion.value) {
-        if (!codificacion.value.autorizacion) return 'El número de autorización es obligatorio para codificación.'
-        if (props.mode === 'create' && autorizacionDuplicada.value) return 'El número de autorización ya está registrado.'
+        if (!esPgp.value && !codificacion.value.autorizacion) return 'El número de autorización es obligatorio para codificación.'
+        if (!esPgp.value && props.mode === 'create' && autorizacionDuplicada.value) return 'El número de autorización ya está registrado.'
         if (!codificacion.value.fechaVigencia) return 'La fecha de vigencia es obligatoria para codificación.'
     }
 
@@ -2025,7 +2045,8 @@ const agregarFormData = (formData, valor, clave = '') => {
 const crearPayloadConDocumento = (payload) => {
     const formData = new FormData()
     agregarFormData(formData, payload)
-    formData.append('documento_codificacion', documentoCodificacion.value)
+    documentosCodificacion.value.forEach((archivo, index) => formData.append(`documentos_codificacion[${index}]`, archivo))
+    if (comentarioCodificacion.value.trim()) formData.append('comentario_codificacion', comentarioCodificacion.value.trim())
     return formData
 }
 
@@ -2131,7 +2152,7 @@ const guardarCotizacion = async () => {
         if (props.mode === 'edit') {
             result = await update(route.params.id, payload)
         } else {
-            result = await create(documentoCodificacion.value ? crearPayloadConDocumento(payload) : payload)
+            result = await create(documentosCodificacion.value.length ? crearPayloadConDocumento(payload) : { ...payload, comentario_codificacion: comentarioCodificacion.value })
         }
 
         const apiError = result?.error?.value
@@ -2157,7 +2178,7 @@ const guardarCotizacion = async () => {
 
         // Reset
         paciente.value = { tipo_identificacion: '', numero_identificacion: '', nombres: '', apellidos: '', correo: '', telefono: '', entidad_id: '' }
-        cotizacion.value = { origen: '', tipo_gestion: '', estado_id: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
+        cotizacion.value = { origen: esPgp.value ? '2' : '', tipo_gestion: esPgp.value ? 'codificación' : '', estado_id: '', medico_id: '', consultorio_id: '', observaciones: '', poliza_id: '', poliza: null, valor_poliza: 0, fecha_vigencia: '', items: [], insumos: [], lentes: [] }
         codificacion.value = { autorizacion: '', copago: '', excedenteTope: '', lentes: '', auxilioLente: '', preAnestesia: '', otros: '', fechaVigencia: '', fechaAutorizacion: '', diasVigencia: '' };
         limpiarDocumentoCodificacion()
         reiniciarValidacionAutorizacion()

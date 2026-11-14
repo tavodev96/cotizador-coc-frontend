@@ -2,6 +2,8 @@
 definePageMeta({
   middleware: ['sanctum:auth'],
 })
+const props = defineProps<{ pgp?: boolean }>()
+const reportPath = computed(() => props.pgp ? '/api/reportes/pgp' : '/api/reportes/cotizaciones')
 
 type ColumnaKey =
   | 'tipo_gestion'
@@ -145,7 +147,7 @@ const { user } = useSanctumAuth()
 
 const { hasPermission, ensureUserPermissions } = useUserPermissions()
 
-const puedeExportar = computed(() => hasPermission('reportes.cotizaciones.exportar'))
+const puedeExportar = computed(() => hasPermission(props.pgp ? 'reportes.pgp.exportar' : 'reportes.cotizaciones.exportar'))
 const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / porPagina.value)))
 const columnasTabla = computed(() => columnas.filter((c) => columnasVisibles.value.includes(c.key)))
 
@@ -164,7 +166,7 @@ const columnasPorDefecto: ColumnaKey[] = [
 
 const storageKeyColumnas = computed(() => {
   const userId = (user.value as { id?: number } | null)?.id ?? 'anon'
-  return `reporte-cotizaciones-columnas-${userId}`
+  return `reporte-${props.pgp ? 'pgp' : 'cotizaciones'}-columnas-${userId}`
 })
 
 const construirParams = (conPaginacion = true) => {
@@ -240,7 +242,7 @@ const buscar = async () => {
   cargando.value = true
   errorMsg.value = ''
 
-  const { data, error } = await useSanctumFetch('/api/reportes/cotizaciones', {
+  const { data, error } = await useSanctumFetch(reportPath.value, {
     method: 'GET',
     query: construirParams(),
   })
@@ -314,7 +316,7 @@ const descargarExcel = async () => {
   errorMsg.value = ''
 
   try {
-    const { data, error } = await useSanctumFetch('/api/reportes/cotizaciones/exportar-datos', {
+    const { data, error } = await useSanctumFetch(`${reportPath.value}/exportar-datos`, {
       method: 'GET',
       query: {
         ...construirParams(false),
@@ -389,7 +391,7 @@ const descargarExcel = async () => {
     })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
-    const fileName = `reporte_cotizaciones_${new Date().toISOString().slice(0, 10)}.xlsx`
+    const fileName = `reporte_${props.pgp ? 'pgp' : 'cotizaciones'}_${new Date().toISOString().slice(0, 10)}.xlsx`
 
     a.href = url
     a.download = fileName
@@ -408,7 +410,7 @@ const descargarExcel = async () => {
 onMounted(async () => {
   await ensureUserPermissions()
 
-  if (!hasPermission('reportes.cotizaciones.ver')) {
+  if (!hasPermission(props.pgp ? 'reportes.pgp.ver' : 'reportes.cotizaciones.ver')) {
     await navigateTo('/403')
     return
   }
@@ -423,7 +425,7 @@ onMounted(async () => {
   <div class="max-w-[1500px] mx-auto px-4 md:px-6 py-6 space-y-5">
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Reportes / Cotizaciones</h1>
+        <h1 class="text-xl md:text-2xl font-semibold text-slate-900">Reportes / {{ props.pgp ? 'PGP' : 'Cotizaciones' }}</h1>
         <div class="flex items-center gap-2">
           <details class="relative">
             <summary class="h-10 px-4 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center">

@@ -211,6 +211,8 @@
 import { computed, onMounted, ref } from "vue"
 import { push } from "notivue"
 
+definePageMeta({ middleware: ['sanctum:auth'] })
+const { hasRole, hasPermission, ensureUserPermissions } = useUserPermissions()
 const { consultarPorHistoria } = useConsultas()
 const route = useRoute()
 
@@ -540,7 +542,13 @@ const formatearNumero = (valor, decimals = 2) => {
 
 const formatearMoneda = (valor) => `$${formatearNumero(valor, 0)}`
 
-onMounted(() => {
+onMounted(async () => {
+    await ensureUserPermissions()
+    if (hasRole('asesor_pgp') && !hasPermission('consultas.cotizaciones.ver')) {
+        await navigateTo('/403')
+        return
+    }
+
     const documento = String(route.query.documento || '').trim()
     if (!documento) return
 
