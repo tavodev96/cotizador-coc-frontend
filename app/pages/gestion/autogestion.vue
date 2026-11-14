@@ -223,6 +223,7 @@
                   <template v-else-if="columna.key === 'cotizacion'">
                     <p class="font-semibold text-slate-900">{{ ordenamiento.cotizacion_codigo || '-' }}</p>
                     <p v-if="ordenamiento.cotizacion?.tipo_gestion" class="text-xs text-slate-500 capitalize">{{ ordenamiento.cotizacion.tipo_gestion }}</p>
+                    <span v-if="ordenamiento.cotizacion?.codificacion?.renovada" class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Renovada</span>
                   </template>
                   <template v-else-if="columna.key === 'gestor'">
                     <p class="font-medium text-slate-900">{{ gestorOrdenamiento(ordenamiento) }}</p>

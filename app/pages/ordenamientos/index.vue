@@ -2,7 +2,7 @@
 import { Notivue, Notification, filledIcons } from 'notivue'
 
 definePageMeta({
-    middleware: ['sanctum:auth'],
+    middleware: ['sanctum:auth', 'catalog-permission'],
 })
 
 const config = useRuntimeConfig()

@@ -1,6 +1,6 @@
 ﻿<script setup>
 definePageMeta({
-  middleware: ['sanctum:auth'],
+  middleware: ['sanctum:auth', 'catalog-permission'],
 });
 
 const router = useRouter()
@@ -151,7 +151,7 @@ const valorColumna = (cotizacion, key) => {
   const valores = {
     created_at: fechaCorta(cotizacion?.created_at),
     codigo: cotizacion?.codigo || '',
-    tipo_gestion: cotizacion?.tipo_gestion || '',
+    tipo_gestion: `${cotizacion?.tipo_gestion || ''}${cotizacion?.codificacion?.renovada ? ' · Renovada' : ''}`,
     origen: textoOrigen(cotizacion?.origen),
     paciente: nombrePaciente(cotizacion),
     identificacion: cotizacion?.paciente?.numero_identificacion || 'N/A',
@@ -622,8 +622,12 @@ onBeforeUnmount(() => {
               class="px-4 py-3 align-top text-slate-700"
               :class="[col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left', ['created_at', 'codigo', 'identificacion', 'hora_programada', 'total'].includes(col.key) ? 'whitespace-nowrap' : 'min-w-40']"
             >
-              <span v-if="col.key === 'codigo'" class="font-bold text-slate-950">{{ c.codigo }}</span>
+              <span v-if="col.key === 'codigo'" class="inline-flex items-center gap-2 font-bold text-slate-950">
+                {{ c.codigo }}
+                <span v-if="c.codificacion?.renovada" title="Codificación renovada" aria-label="Codificación renovada" class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">R</span>
+              </span>
               <span v-else-if="col.key === 'paciente'" class="font-semibold text-slate-950">{{ nombrePaciente(c) }}</span>
+              <span v-else-if="col.key === 'tipo_gestion'">{{ c.tipo_gestion }} <span v-if="c.codificacion?.renovada" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Renovada</span></span>
               <span v-else-if="col.key === 'estado'" class="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase text-indigo-700 ring-1 ring-indigo-200">
                 {{ c.estado?.nombre || 'Sin estado' }}
               </span>
@@ -651,6 +655,7 @@ onBeforeUnmount(() => {
                 <NuxtLink :to="linkConRetorno(`/cotizacion/${c.id}`)" title="Ver detalle" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-white hover:border-indigo-300" @click="guardarRetornoSeguimiento">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5c5.5 0 9 5.3 9 7s-3.5 7-9 7s-9-5.3-9-7s3.5-7 9-7m0 2c-4 0-6.8 3.8-7 5c.2 1.2 3 5 7 5s6.8-3.8 7-5c-.2-1.2-3-5-7-5m0 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5"/></svg>
                 </NuxtLink>
+                 <CotizacionAuthorizationManager v-if="c.codificacion && ['codificación', 'codificacion'].includes(String(c.tipo_gestion).toLowerCase()) && !String(c.codigo).startsWith('PGP-')" :cotizacion="c" icon-only @updated="(codificacion, fechaVigencia) => { c.codificacion = codificacion; c.fecha_vigencia = fechaVigencia }" />
                 <NuxtLink :to="linkConRetorno(`/cotizacion/imprimir/${c.id}`)" title="Imprimir cotización" class="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" @click="guardarRetornoSeguimiento">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 9V3h12v6h1a3 3 0 0 1 3 3v5h-4v4H6v-4H2v-5a3 3 0 0 1 3-3zm2 0h8V5H8zm0 10h8v-5H8zm11-4v-3a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3h1v-3h12v3z"/></svg>
                 </NuxtLink>

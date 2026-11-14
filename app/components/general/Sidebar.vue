@@ -9,8 +9,8 @@
     <div v-if="canAccessGestion" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Gestión</p>
       <SidebarLink v-if="hasPermission('cotizar.crear')" label="Cotizar" link="/gestion/cotizacion" />
-      <SidebarLink v-if="hasPermission('cotizar.ver')" label="Seguimiento" link="/gestion/seguimiento" />
-      <SidebarLink v-if="hasPermission('cotizar.ver')" label="Ordenamientos" link="/ordenamientos" />
+      <SidebarLink v-if="hasPermission('seguimiento.ver')" label="Seguimiento" link="/gestion/seguimiento" />
+      <SidebarLink v-if="hasPermission('ordenamientos.ver')" label="Ordenamientos" link="/ordenamientos" />
       <SidebarLink v-if="canAccessAutogestion" label="Autogestión" link="/gestion/autogestion" />
     </div>
 
@@ -31,15 +31,16 @@
     <!-- Tarifas - Visible si tiene permisos de tarifas -->
     <div v-if="canAccessTarifas" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tarifas</p>
-      <SidebarLink label="Procedimientos" link="/tarifas/procedimientos" />
-      <SidebarLink label="Insumos" link="/tarifas/insumos" />
-      <SidebarLink label="Lentes" link="/tarifas/lentes" />
+      <SidebarLink v-if="hasPermission('procedimientos.ver')" label="Procedimientos" link="/tarifas/procedimientos" />
+      <SidebarLink v-if="hasPermission('insumos.ver')" label="Insumos" link="/tarifas/insumos" />
+      <SidebarLink v-if="hasPermission('lentes.ver')" label="Lentes" link="/tarifas/lentes" />
     </div>
 
     <!-- Reportes - Visible según permisos de reportes -->
     <div v-if="canAccessReportes" class="bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 px-4 py-4">
       <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Reportes</p>
       <SidebarLink v-if="canAccessReporteCotizaciones" label="Reporte de cotizaciones" link="/reportes/cotizaciones" />
+      <SidebarLink v-if="hasPermission('reportes.pgp.ver')" label="Reporte PGP" link="/reportes/pgp" />
       <SidebarLink v-if="canAccessReporteSalesforce" label="Reporte Salesforce" link="/reportes/salesforce" />
     </div>
 
@@ -49,6 +50,7 @@
       <SidebarLink v-if="canAccessUsuariosConfig" label="Usuarios" link="/configuracion/usuarios" />
       <SidebarLink v-if="canAccessRolesPermisosConfig" label="Roles y permisos" link="/configuracion/roles-permisos" />
       <SidebarLink v-if="hasPermission('configuracion.correo.ver') || isSuperAdmin" label="Correo" link="/configuracion/correo" />
+      <SidebarLink v-if="hasPermission('configuracion.pgp.editar')" label="Datos de impresión PGP" link="/configuracion/pgp" />
       <SidebarLink v-if="hasPermission('configuracion.maestros.ver') || isSuperAdmin" label="Maestros" link="/configuracion/maestros" />
       <SidebarLink v-if="canAccessFormularioCampos" label="Campos de formulario" link="/configuracion/formulario-campos" />
       <SidebarLink v-if="canAccessPowerBi" label="Integración Power BI" link="/configuracion/power-bi" />
@@ -72,7 +74,7 @@ const { ensureUserPermissions, hasPermission, hasAnyPermission, hasRole } = useU
 
 // Recargar permisos y roles al montar el componente
 onMounted(async () => {
-  ensureUserPermissions()
+  ensureUserPermissions(true)
 })
 
 // Verificar si es administrador por rol
@@ -90,7 +92,7 @@ const isConfigAdmin = computed(() => {
 
 // Verificar si puede acceder a la sección de cotizaciones
 const canAccessGestion = computed(() => {
-  return hasAnyPermission(['cotizar.crear', 'cotizar.ver', 'cotizar.editar', 'autogestion.ver'])
+  return hasAnyPermission(['cotizar.crear', 'seguimiento.ver', 'ordenamientos.ver', 'autogestion.ver'])
 })
 
 const canAccessAutogestion = computed(() => {
@@ -102,6 +104,7 @@ const canAccessConsultas = computed(() => {
 })
 
 const canAccessCotizacionesConsulta = computed(() => {
+  if (hasRole('asesor_pgp')) return hasPermission('consultas.cotizaciones.ver')
   return hasAnyPermission(['cotizar.ver', 'consultas.cotizaciones.ver']) || hasRole('cajero') || hasRole('Cajero') || isAdmin.value || isSuperAdmin.value
 })
 
@@ -111,7 +114,7 @@ const canAccessConsultasMedicas = computed(() => {
 
 // Verificar si puede acceder a tarifas
 const canAccessTarifas = computed(() => {
-  return hasAnyPermission(['procedimientos.ver', 'insumos.ver', 'lentes.ver']) || isAdmin.value
+  return hasAnyPermission(['procedimientos.ver', 'insumos.ver', 'lentes.ver'])
 })
 
 // Verificar si puede acceder a programación/cirugía
@@ -128,7 +131,7 @@ const canAccessCirugia = computed(() => {
 })
 
 const canAccessConfiguracion = computed(() => {
-  return isConfigAdmin.value || hasAnyPermission(['configuracion.errores.ver', 'configuracion.correo.ver', 'configuracion.modulos', 'configuracion.permisos', 'reportes.cotizaciones.exportar'])
+  return isConfigAdmin.value || hasAnyPermission(['configuracion.errores.ver', 'configuracion.correo.ver', 'configuracion.pgp.editar', 'configuracion.modulos', 'configuracion.permisos', 'reportes.cotizaciones.exportar'])
 })
 
 const canAccessFormularioCampos = computed(() => {
@@ -148,7 +151,7 @@ const canAccessRolesPermisosConfig = computed(() => {
 })
 
 const canAccessReportes = computed(() => {
-  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver', 'reportes.salesforce.ver']) || isAdmin.value || isSuperAdmin.value
+  return hasAnyPermission(['reportes.ver', 'reportes.cotizaciones.ver', 'reportes.pgp.ver', 'reportes.salesforce.ver']) || isAdmin.value || isSuperAdmin.value
 })
 
 const canAccessReporteCotizaciones = computed(() => {

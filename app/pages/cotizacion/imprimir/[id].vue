@@ -9,6 +9,8 @@ import { PDFDocument } from 'pdf-lib'
 const route = useRoute()
 const router = useRouter()
 const cotizacion = ref(null)
+const esPgp = computed(() => String(cotizacion.value?.codigo || '').startsWith('PGP-'))
+const pgpSettings = ref({ nombre: 'PGP', telefono: '', correo: '' })
 const contentRef = ref(null)
 const loading = ref(true)
 const loadingDescargar = ref(false)
@@ -71,6 +73,10 @@ onMounted(async () => {
       console.error('Error fetching cotizacion:', error.value)
     } else {
       cotizacion.value = data.value.cotizacion
+      if (esPgp.value) {
+        const { data: settings } = await useSanctumFetch('/api/configuracion/pgp')
+        if (settings.value?.settings) pgpSettings.value = settings.value.settings
+      }
       correoDestino.value = cotizacion.value?.paciente?.correo || ''
     }
   } catch (err) {
@@ -1041,9 +1047,9 @@ const enviarCorreo = async () => {
       <div>
         <strong>Asesor:</strong> {{ cotizacion?.asesor.name }}
         <br>
-        <strong>SAI:</strong> 315 6671052
+        <strong>{{ esPgp ? pgpSettings.nombre : 'SAI' }}:</strong> {{ esPgp ? pgpSettings.telefono : '315 6671052' }}
         <br>
-        <strong>Correo SAI: </strong> {{ cotizacion?.asesor.email }}
+        <strong>Correo {{ esPgp ? pgpSettings.nombre : 'SAI' }}: </strong> {{ esPgp ? pgpSettings.correo : cotizacion?.asesor.email }}
       </div>
 
       <!-- Inclusiones -->

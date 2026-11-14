@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({
-    middleware: ['sanctum:auth'],
+  middleware: ['sanctum:auth', 'catalog-permission'],
 })
 
 const { items, pagination, search, concepto, loading, fetchTarifas } = useTarifas('insumos')
