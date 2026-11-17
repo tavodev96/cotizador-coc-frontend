@@ -23,6 +23,7 @@ type ColumnaKey =
   | 'lateralidad'
   | 'valor_coc_dc_derecho_clinico'
   | 'asesor'
+  | 'estado'
   | 'estado_gestion'
   | 'observacion_gestion'
 
@@ -63,6 +64,7 @@ interface ReporteItem {
   lateralidad: string | null
   valor_coc_dc_derecho_clinico: string
   asesor: string | null
+  estado: string | null
   estado_gestion: string | null
   observacion_gestion: string | null
 }
@@ -113,6 +115,7 @@ const columnas: ColumnaDef[] = [
   { key: 'lateralidad', label: 'Lateralidad' },
   { key: 'valor_coc_dc_derecho_clinico', label: 'Valor COC (DP/LASH)' },
   { key: 'asesor', label: 'Asesor' },
+  { key: 'estado', label: 'Estado' },
   { key: 'estado_gestion', label: 'Estado gestión' },
   { key: 'observacion_gestion', label: 'Observación' },
 ]
@@ -127,6 +130,7 @@ const columnasVisibles = ref<ColumnaKey[]>([
   'cups_procedimientos',
   'lateralidad',
   'valor_coc_dc_derecho_clinico',
+  'estado',
   'estado_gestion',
 ])
 
@@ -161,6 +165,7 @@ const columnasPorDefecto: ColumnaKey[] = [
   'cups_procedimientos',
   'lateralidad',
   'valor_coc_dc_derecho_clinico',
+  'estado',
   'estado_gestion',
 ]
 
@@ -503,7 +508,7 @@ onMounted(async () => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Estado de la gestión</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Estado</label>
           <select v-model="filtros.estado_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white">
             <option value="">Todos</option>
             <option v-for="estado in estados" :key="estado.id" :value="estado.id">{{ estado.nombre || estado.name }}</option>

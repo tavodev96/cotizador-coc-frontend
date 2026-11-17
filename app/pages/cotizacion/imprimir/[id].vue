@@ -1047,8 +1047,10 @@ const enviarCorreo = async () => {
       <div>
         <strong>Asesor:</strong> {{ cotizacion?.asesor.name }}
         <br>
-        <strong>{{ esPgp ? pgpSettings.nombre : 'SAI' }}:</strong> {{ esPgp ? pgpSettings.telefono : '315 6671052' }}
-        <br>
+        <template v-if="!(esPgp && esCodificacion)">
+          <strong>{{ esPgp ? pgpSettings.nombre : 'SAI' }}:</strong> {{ esPgp ? pgpSettings.telefono : '315 6671052' }}
+          <br>
+        </template>
         <strong>Correo {{ esPgp ? pgpSettings.nombre : 'SAI' }}: </strong> {{ esPgp ? pgpSettings.correo : cotizacion?.asesor.email }}
       </div>
 
