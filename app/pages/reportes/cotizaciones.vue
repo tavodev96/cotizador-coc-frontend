@@ -24,6 +24,7 @@ type ColumnaKey =
   | 'valor_coc_dc_derecho_clinico'
   | 'asesor'
   | 'estado'
+  | 'fecha_cirugia'
   | 'estado_gestion'
   | 'observacion_gestion'
 
@@ -65,6 +66,7 @@ interface ReporteItem {
   valor_coc_dc_derecho_clinico: string
   asesor: string | null
   estado: string | null
+  fecha_cirugia: string | null
   estado_gestion: string | null
   observacion_gestion: string | null
 }
@@ -116,6 +118,7 @@ const columnas: ColumnaDef[] = [
   { key: 'valor_coc_dc_derecho_clinico', label: 'Valor COC (DP/LASH)' },
   { key: 'asesor', label: 'Asesor' },
   { key: 'estado', label: 'Estado' },
+  { key: 'fecha_cirugia', label: 'Fecha de cirugía' },
   { key: 'estado_gestion', label: 'Estado gestión' },
   { key: 'observacion_gestion', label: 'Observación' },
 ]
@@ -131,6 +134,7 @@ const columnasVisibles = ref<ColumnaKey[]>([
   'lateralidad',
   'valor_coc_dc_derecho_clinico',
   'estado',
+  'fecha_cirugia',
   'estado_gestion',
 ])
 
@@ -166,6 +170,7 @@ const columnasPorDefecto: ColumnaKey[] = [
   'lateralidad',
   'valor_coc_dc_derecho_clinico',
   'estado',
+  'fecha_cirugia',
   'estado_gestion',
 ]
 
@@ -358,7 +363,9 @@ const descargarExcel = async () => {
         }
 
         const valor = item[columna.key]
-        fila[columna.label] = valor === null || valor === undefined || valor === '' ? 'N/A' : String(valor)
+        fila[columna.label] = valor === null || valor === undefined || valor === ''
+          ? (columna.key === 'fecha_cirugia' ? '' : 'N/A')
+          : String(valor)
       })
 
       return fila
@@ -590,6 +597,7 @@ onMounted(async () => {
                 >
                   {{ item.cups_procedimientos || 'N/A' }}
                 </span>
+                <template v-else-if="col.key === 'fecha_cirugia'">{{ item.fecha_cirugia || '' }}</template>
                 <template v-else>{{ item[col.key] || 'N/A' }}</template>
               </td>
             </tr>

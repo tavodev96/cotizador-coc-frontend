@@ -31,9 +31,13 @@ const consultaPowerBi = `let
     Paginas = {1..Number.From(PrimeraPagina[last_page])},
     Respuestas = List.Transform(Paginas, each if _ = 1 then PrimeraPagina else ObtenerPagina(_)),
     Registros = List.Combine(List.Transform(Respuestas, each _[data])),
-    Tabla = Table.FromRecords(Registros)
+    Tabla = Table.FromRecords(Registros),
+    FechaCirugia = Table.TransformColumns(
+        Tabla,
+        {{"fecha_cirugia", each if _ = null then null else Date.FromText(_, [Format = "yyyy-MM-dd", Culture = "en-US"]), type date}}
+    )
 in
-    Tabla`
+    FechaCirugia`
 
 const copiarConsulta = async () => {
   try {
@@ -60,7 +64,7 @@ onMounted(async () => {
       <p class="text-sm font-semibold uppercase tracking-wide text-indigo-700">Configuración</p>
       <h1 class="mt-1 text-2xl font-semibold text-slate-900">Integración Power BI</h1>
       <p class="mt-2 text-sm leading-6 text-slate-600">
-        Consulta el reporte de cotizaciones desde Power BI mediante una API paginada y protegida. La fuente incluye los CUPS y el nombre de cada procedimiento en pares de columnas.
+        Consulta el reporte de cotizaciones desde Power BI mediante una API paginada y protegida. La fuente incluye el estado de la cotización, la fecha de cirugía y los CUPS con el nombre de cada procedimiento en pares de columnas.
       </p>
     </section>
 
@@ -116,7 +120,7 @@ Content-Type: application/json
       <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 text-sm leading-6 text-indigo-950">
         <h2 class="font-semibold">Estructura y seguridad</h2>
         <p class="mt-1">
-          La API es <code>GET /api/reportes/cotizaciones/power-bi</code>, usa los mismos filtros del reporte web y pagina la respuesta con <code>page</code>, <code>per_page</code> y <code>last_page</code>. Cada procedimiento agrega <code>cup_1</code>, <code>nombre_procedimiento_1</code>, <code>cup_2</code>, <code>nombre_procedimiento_2</code>, y así sucesivamente.
+          La API es <code>GET /api/reportes/cotizaciones/power-bi</code>, usa los mismos filtros del reporte web y pagina la respuesta con <code>page</code>, <code>per_page</code> y <code>last_page</code>. Incluye <code>estado</code> (distinto de <code>estado_gestion</code>) y <code>fecha_cirugia</code>, que queda vacía si no corresponde o no fue registrada. La consulta convierte esa fecha al tipo fecha de Power BI. Cada procedimiento agrega <code>cup_1</code>, <code>nombre_procedimiento_1</code>, <code>cup_2</code>, <code>nombre_procedimiento_2</code>, y así sucesivamente. Si ya tiene una consulta creada en Power BI, actualícela y vuelva a aplicar los cambios para incorporar las nuevas columnas.
         </p>
         <p class="mt-2">
           Rote el token si deja de utilizarse. Cerrar sesión con ese token lo revoca; por eso se recomienda que el usuario de Power BI no se use para el acceso diario a la aplicación.
